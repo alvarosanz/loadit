@@ -1,0 +1,21 @@
+{
+    "host": "192.168.0.154",
+    "port": 8080,
+    "path": "new_foo",
+    "output_file": "",
+    "table": "ELEMENT FORCES - QUAD4 (33)",
+    "fields": [
+        "NX-AVG-MAX",
+        "NY-AVG-MAX",
+        "NXY-ABS(AVG)-MAX",
+        "MaxPpal-AVG-MAX",
+        "MinPpal-AVG-MAX",
+        "MaxShear-AVG-MAX",
+        "VonMises-AVG-MAX"
+    ],
+    "LIDs": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/LID_combinations.csv",
+    "IDs": "",
+    "groups": "/Users/Alvaro/Desktop/nastranpy/nastranpy/nastranpy/examples/skin_groups.csv",
+    "geometry": "",
+    "weights": ""
+}
