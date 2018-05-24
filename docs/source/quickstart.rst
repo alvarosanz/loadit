@@ -2,8 +2,8 @@
 Quickstart
 **********
 
-Usage example: Handling nastran results with a local database
-=============================================================
+Using local databases
+=====================
 
 Create a new database::
 
@@ -45,8 +45,8 @@ Restore database to a previous state (this action is NOT reversible!)::
     database.restore('Initial batch')
 
 
-Usage example: Handling nastran results with remote databases
-=============================================================
+Using remote databases
+======================
 
 Open a new client interfacing the cluster (you will be asked to login)::
 
