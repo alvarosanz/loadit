@@ -16,6 +16,9 @@ from loadit.misc import humansize, get_hasher, hash_bytestr
 
 
 class DatabaseHeader(object):
+    """
+    Stores database metadata.
+    """
 
     def __init__(self, path=None, header=None):
         """
@@ -123,6 +126,9 @@ class DatabaseHeader(object):
 
 
 class Database(object):
+    """
+    Handles a local database.
+    """
 
     def __init__(self, path=None):
         """
@@ -138,7 +144,7 @@ class Database(object):
 
     def load(self):
         """
-        Load the database
+        Load the database.
         """
 
         if self.path:
@@ -543,8 +549,25 @@ class Database(object):
 
 
 class MemoryHandler(object):
+    """
+    Handles memory management in queries.
+    """
 
     def __init__(self, fields, LIDs, IDs, groups=None):
+        """
+        Initialize a MemoryHandler instance.
+
+        Parameters
+        ----------
+        fields : list of str
+            List of fields.
+        LIDs : list of int
+            List of LIDs.
+        IDs : list of int
+            List of IDs.
+        groups : list of str, optional
+            List of group names (for aggregated queries).
+        """
 
         # Check aggregation options
         levels = {field.count('-') for field in fields}
@@ -602,6 +625,9 @@ class MemoryHandler(object):
                     self._arrays[field + ': LID'].append(self.LIDs2[i, :, :])
 
     def update(self, field):
+        """
+        Copy data from one array to the other associated arrays (if any).
+        """
 
         for array in self._arrays[field][1:]:
                 array[:] = self._arrays[field][0]
@@ -609,9 +635,32 @@ class MemoryHandler(object):
         self.completed_fields.add(field)
 
     def __getitem__(self, field):
+        """
+        Get a view array for the specified field.
+
+        Parameters
+        ----------
+        field : str
+            Field name.
+
+        Returns
+        -------
+        numpy.array
+            View array for the specified field.
+        """
         return self._arrays[field][0]
 
     def __setitem__(self, field, value):
+        """
+        Copy data to the arrays associated with a field.
+
+        Parameters
+        ----------
+        field : str
+            Field name.
+        value : numpy.array
+            Field array.
+        """
 
         try:
 
@@ -623,33 +672,56 @@ class MemoryHandler(object):
 
         self.completed_fields.add(field)
 
-    def __contains__(self, value):
-        return value in self._arrays
+    def __contains__(self, field):
+        """
+        Check if field is available.
+        """
+        return field in self._arrays
 
 
 def aggregate(array, array_agg, aggregation, level, LIDs=None, LIDs_agg=None, weights=None):
-        axis = 2 - level
+    """
+    Aggregate array (AVG, MAX or MIN).
 
-        if aggregation == 'AVG':
+    Parameters
+    ----------
+    array : numpy.array
+        Array to be aggregated.
+    array_agg : numpy.array
+        Aggregated array.
+    aggregation : str {'AVG', 'MAX', 'MIN'}
+        Aggregation type.
+    level : int {1, 2}
+        Aggregation level.
+    LIDs : numpy.array, optional
+        Array of LIDs related to 'array'.
+    LIDs_agg : numpy.array, optional
+        Array of critical LIDs (only for level = 2).
+    weights : numpy.array, optional
+        Array of averaging weights (only for aggregation = 'AVG' level = 1).
+    """
+    axis = 2 - level
 
-            if axis == 0:
-                raise ValueError("'AVG' aggregation cannot be applied to LIDs!")
+    if aggregation == 'AVG':
 
-            array_agg[:] = np.average(array, axis, weights)
-        elif aggregation == 'MAX':
+        if axis == 0:
+            raise ValueError("'AVG' aggregation cannot be applied to LIDs!")
 
-            if axis == 0:
-                LIDs_agg[:] = LIDs[array.argmax(axis)]
+        array_agg[:] = np.average(array, axis, weights)
+    elif aggregation == 'MAX':
 
-            array_agg[:] = np.max(array, axis)
-        elif aggregation == 'MIN':
+        if axis == 0:
+            LIDs_agg[:] = LIDs[array.argmax(axis)]
 
-            if axis == 0:
-                LIDs_agg[:] = LIDs[array.argmin(axis)]
+        array_agg[:] = np.max(array, axis)
+    elif aggregation == 'MIN':
 
-            array_agg[:] = np.min(array, axis)
-        else:
-            raise ValueError(f"Unsupported aggregation method: '{aggregation}'")
+        if axis == 0:
+            LIDs_agg[:] = LIDs[array.argmin(axis)]
+
+        array_agg[:] = np.min(array, axis)
+    else:
+        raise ValueError(f"Unsupported aggregation method: '{aggregation}'")
 
 
 @guvectorize(['(int64[:], int64[:], int64[:, :], int64[:, :])'],
