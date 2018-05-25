@@ -4,19 +4,9 @@ loadit
 
 A blazing fast database for FEM loads.
 
-Currently there is only support for nastran .pch files for the following tables:
-
-* 'ELEMENT FORCES - ROD (1)'
-* 'ELEMENT FORCES - BEAM (2)'
-* 'ELEMENT FORCES - ELAS1 (11)'
-* 'ELEMENT FORCES - ELAS2 (12)'
-* 'ELEMENT FORCES - ELAS3 (13)'
-* 'ELEMENT FORCES - ELAS4 (14)'
-* 'ELEMENT FORCES - QUAD4 (33)'
-* 'ELEMENT FORCES - BAR (34)'
-* 'ELEMENT FORCES - TRIA3 (74)'
-* 'ELEMENT FORCES - BARS (100)'
-* 'ELEMENT FORCES - BUSH (102)'
+.. image:: https://readthedocs.org/projects/loadit/badge/?version=latest
+:target: https://loadit.readthedocs.io/en/latest/?badge=latest
+:alt: Documentation Status
 
 Requirements
 ============
@@ -36,8 +26,8 @@ Run the following command::
     pip install loadit
 
 
-Usage example: Handling nastran results with a local database
-=============================================================
+Using local databases
+=====================
 
 Create a new database::
 
@@ -79,8 +69,8 @@ Restore database to a previous state (this action is NOT reversible!)::
     database.restore('Initial batch')
 
 
-Usage example: Handling nastran results with remote databases
-=============================================================
+Using remote databases
+======================
 
 Open a new client interfacing the cluster (you will be asked to login)::
 
