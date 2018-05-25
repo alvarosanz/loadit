@@ -5,8 +5,8 @@ loadit
 A blazing fast database for FEM loads.
 
 .. image:: https://readthedocs.org/projects/loadit/badge/?version=latest
-:target: https://loadit.readthedocs.io/en/latest/?badge=latest
-:alt: Documentation Status
+   :target: https://loadit.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
 
 Requirements
 ============
