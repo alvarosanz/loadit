@@ -34,11 +34,11 @@ class TableData(object):
     def IDs(self):
         return np.array(self._IDs)
 
-    def __getitem__(self, key):
-        return self._fields[key]
+    def __getitem__(self, field):
+        return self._fields[field]
 
-    def __contains__(self, value):
-        return value in self._fields
+    def __contains__(self, field):
+        return field in self._fields
 
     def close(self):
         """
