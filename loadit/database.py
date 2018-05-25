@@ -509,7 +509,13 @@ class Database(object):
             data = mem_handler.data1.reshape((len(fields), len(LIDs_queried) * len(groups))).T
             columns = mem_handler.fields[1]
         else:
-            index_names = ['Group']
+
+            if groups:
+                index_names = ['Group']
+            else:
+                index_names = [self.header.tables[table]['columns'][1][0]]
+                groups = IDs_queried
+
             columns = [field + suffix for field in mem_handler.fields[2] for suffix in ('', ': LID')]
             data = {field: mem_handler[field].ravel() for field in columns}
 
@@ -573,14 +579,14 @@ class MemoryHandler(object):
         levels = {field.count('-') for field in fields}
         self.level = levels.pop()
 
+        if not groups and self.level == 1:
+            self.level = 2
+
         if levels or self.level > 2:
             raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
 
-        if self.level and not groups:
-            raise ValueError('A non-grouped query must not be aggregated!')
-
-        if not self.level and groups:
-            raise ValueError('A grouped query must be aggregated!')
+        if self.level == 0 and groups:
+            raise ValueError('A grouped query must be aggregated at least one time!')
 
         # Field processing
         self._arrays = dict()
@@ -591,6 +597,9 @@ class MemoryHandler(object):
 
             for level, subfield in enumerate([field[:match.start()] for match in
                                               re.finditer('-', field)] + [field]):
+
+                if not groups and level == 1:
+                    level = 2
 
                 if subfield not in self._arrays or level == self.level:
                     self.fields[level].append(subfield)
@@ -611,10 +620,14 @@ class MemoryHandler(object):
             self._arrays[field].append(self.data0[i, :, :])
 
         if self.level > 0:
-            self.data1 = np.empty((len(self.fields[1]), len(LIDs), len(groups)), dtype=np.float64)
 
-            for i, field in enumerate(self.fields[1]):
-                self._arrays[field].append(self.data1[i, :, :])
+            if groups:
+                self.data1 = np.empty((len(self.fields[1]), len(LIDs), len(groups)), dtype=np.float64)
+
+                for i, field in enumerate(self.fields[1]):
+                    self._arrays[field].append(self.data1[i, :, :])
+            else:
+                groups = IDs
 
             if self.level == 2:
                 self.data2 = np.empty((len(self.fields[2]), 1, len(groups)), dtype=np.float64)
