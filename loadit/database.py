@@ -741,6 +741,20 @@ def aggregate(array, array_agg, aggregation, level, LIDs=None, LIDs_agg=None, we
              '(n), (m) -> (n, m), (n, m)',
              target='cpu', nopython=True)
 def set_index(index0, index1, out0, out1):
+    """
+    Set index columns as a combination of both.
+
+    Parameters
+    ----------
+    index0 : numpy.array
+        First index column non-combined (i.e. [10, 20, 30]).
+    index1 : numpy.array
+        Second index column non-combined (i.e. [1, 2]).
+    out0 : numpy.array
+        First index column combined (i.e. [10, 10, 20, 20, 30, 30]).
+    out1 : numpy.array
+        Second index column combined (i.e. [1, 2, 1, 2, 1, 2]).
+    """
 
     for i in range(len(index0)):
 
@@ -749,15 +763,41 @@ def set_index(index0, index1, out0, out1):
             out1[i, j] = index1[j]
 
 
-def is_abs(field_str):
+def is_abs(field):
+    """
+    Check if field is absolute value.
 
-    if field_str[:4] == 'ABS(' and field_str[-1] == ')':
-        return field_str[4:-1], True
+    Parameters
+    ----------
+    field : str
+        Field name.
+
+    Returns
+    -------
+    (bool, str)
+        Whether the field is absolute or not along with the basic field itself.
+    """
+
+    if field[:4] == 'ABS(' and field[-1] == ')':
+        return field[4:-1], True
     else:
-        return field_str, False
+        return field, False
 
 
 def parse_query_file(file):
+    """
+    Parse query file.
+
+    Parameters
+    ----------
+    file : str
+        Query file path.
+
+    Returns
+    -------
+    dict
+        Parsed query.
+    """
 
     with open(file) as f:
         query = json.load(f)
@@ -803,8 +843,21 @@ def parse_query_file(file):
 
 
 def parse_query(query):
+    """
+    Parse query dict.
+
+    Parameters
+    ----------
+    query : dict
+        Un-parsed query.
+    Returns
+    -------
+    dict
+        Parsed query.
+    """
     query = {key: value if value else None for key, value in query.items()}
 
+    # Convert string dict keys to int keys
     for field in ('LIDs', 'geometry', 'weights'):
 
         try:

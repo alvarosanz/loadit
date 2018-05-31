@@ -7,8 +7,19 @@ from loadit.misc import get_hash
 
 
 class BaseClient(object):
+    """
+    Handles a remote connection.
+    """
 
     def authenticate(self, connection):
+        """
+        Authenticate with the server (using a JSON Web Token).
+
+        Parameters
+        ----------
+        connection : Connection
+            Server connection instance.
+        """
 
         if self._authentication:
             connection.send_secret(json.dumps({'authentication': self._authentication.decode()}).encode())
@@ -21,6 +32,9 @@ class BaseClient(object):
         connection.recv()
 
     def _request(self, **kwargs):
+        """
+        Request something to the server.
+        """
         connection = Connection(self.server_address, private_key=self._private_key)
 
         try:
@@ -65,8 +79,27 @@ class BaseClient(object):
 
 
 class DatabaseClient(BaseClient):
+    """
+    Handles a remote database.
+    """
 
     def __init__(self, server_address, path, private_key, authentication, header=None):
+        """
+        Initialize a DatabaseClient instance.
+
+        Parameters
+        ----------
+        server_address : (str, int)
+            Server address (i.e. ('192.168.0.9', 8080)).
+        path : str
+            Database remote path.
+        private_key : cryptography.hazmat.backends.openssl.ec._EllipticCurvePrivateKey
+            Private key.
+        authentication : bytes
+            Server authentication (JSON Web Token).
+        header : dict, optional
+            Database header.
+        """
         self.server_address = server_address
         self.path = path
         self._private_key = private_key
@@ -78,15 +111,43 @@ class DatabaseClient(BaseClient):
             self._request(request_type='header')
 
     def info(self, print_to_screen=True, detailed=False):
+        """
+        Display database info.
+
+        Parameters
+        ----------
+        print_to_screen : bool, optional
+            Whether to print to screen or return an string instead.
+        detailed : bool, optional
+            Whether to show detailed info or not.
+
+        Returns
+        -------
+        str, optional
+            Database info.
+        """
         print(f"Address: {self.server_address[0]} ({self.server_address[1]})")
 
         if self._headers:
             super().info(print_to_screen, detailed)
 
     def check(self):
+        """
+        Check database integrity.
+        """
         print(self._request(request_type='check')['msg'])
 
     def append(self, files, batch_name):
+        """
+        Append new results to database. This operation is reversible.
+
+        Parameters
+        ----------
+        files : list of str
+            List of .pch files.
+        batch_name : str
+            Batch name.
+        """
 
         if isinstance(files, str):
             files = [files]
@@ -94,6 +155,14 @@ class DatabaseClient(BaseClient):
         print(self._request(request_type='append_to_database', files=files, batch=batch_name)['msg'])
 
     def restore(self, batch_name):
+        """
+        Restore database to a previous batch. This operation is not reversible.
+
+        Parameters
+        ----------
+        batch_name : str
+            Batch name.
+        """
         restore_points = [batch[0] for batch in self.header.batches]
 
         if batch_name not in restore_points or batch_name == restore_points[-1]:
@@ -102,10 +171,38 @@ class DatabaseClient(BaseClient):
         print(self._request(request_type='restore_database', batch=batch_name)['msg'])
 
     def query_from_file(self, file, return_dataframe=True):
+        """
+        Perform a query from a file.
+
+        Parameters
+        ----------
+        file : str
+            Query file.
+        return_dataframe : bool, optional
+            Whether to return a pandas dataframe or a pyarrow RecordBatch.
+
+        Returns
+        -------
+        pandas.DataFrame or pyarrow.RecordBatch
+            Data queried.
+        """
         return self.query(**parse_query_file(file), return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
               geometry=None, weights=None, output_file=None, return_dataframe=True, **kwargs):
+        """
+        Perform a query.
+
+        Parameters
+        ----------
+        return_dataframe : bool, optional
+            Whether to return a pandas dataframe or a pyarrow RecordBatch.
+
+        Returns
+        -------
+        pandas.DataFrame or pyarrow.RecordBatch
+            Data queried.
+        """
         batch = self._request(request_type='query', table=table, fields=fields,
                               LIDs=LIDs, IDs=IDs, groups=groups,
                               geometry=geometry, weights=weights)['batch']
@@ -123,6 +220,9 @@ class DatabaseClient(BaseClient):
         return df
 
     def _request(self, **kwargs):
+        """
+        Request something to the server.
+        """
         kwargs['path'] = self.path
         data = super()._request(**kwargs)
         self.header = DatabaseHeader(header=data['header'])
@@ -130,6 +230,9 @@ class DatabaseClient(BaseClient):
 
 
 class Client(BaseClient):
+    """
+    Handles a remote connection.
+    """
 
     def __init__(self, server_address):
         self.server_address = server_address
