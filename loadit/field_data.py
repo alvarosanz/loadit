@@ -52,7 +52,7 @@ class FieldData(object):
         self._data_by_LID = None
         self._data_by_ID = None
 
-    def read(self, LIDs=None, IDs=None, out=None):
+    def read(self, LIDs=None, IDs=None, dtype=np.float32, out=None):
         """
         Returns requested field values.
 
@@ -70,6 +70,8 @@ class FieldData(object):
 
         IDs : list of int, optional
             List of requested IDs. If not provided or None, all IDs are considered.
+        dtype : {numpy.float32, numpy.float64}, optional
+            Field dtype. By default single precission is used.
         out : numpy.ndarray, optional
             A location into which the result is stored. If not provided or None, a freshly-allocated array is returned.
 
@@ -85,7 +87,7 @@ class FieldData(object):
 
         # Pre-allocate memory if necessary
         if out is None:
-            out = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.float64)
+            out = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=dtype)
 
         # Process LID combination data
         is_combination = isinstance(LIDs, dict)
@@ -100,8 +102,8 @@ class FieldData(object):
             LIDs_queried_index = {LID: i for i, LID in enumerate(LIDs_queried + LIDs_combined_used)}
             LID_combinations = [(LIDs_queried_index[LID] if LID in LIDs_queried_index else None,
                                  np.array([LIDs_queried_index[LID] for _, LID in seq], dtype=np.int64),
-                                 np.array([coeff for coeff, _ in seq], dtype=np.float64)) for LID, seq in LIDs.items()]
-            array = np.empty((len(LIDs_queried) + len(LIDs_combined_used), len(IDs_queried)), dtype=np.float64)
+                                 np.array([coeff for coeff, _ in seq], dtype=dtype)) for LID, seq in LIDs.items()]
+            array = np.empty((len(LIDs_queried) + len(LIDs_combined_used), len(IDs_queried)), dtype=dtype)
         else:
             array = out
 
@@ -143,7 +145,8 @@ class FieldData(object):
 
         return out
 
-@guvectorize(['(double[:, :], int64[:], double[:], double[:])'],
+@guvectorize(['(float32[:, :], int64[:], float32[:], float32[:])',
+              '(float64[:, :], int64[:], float64[:], float64[:])'],
              '(n, m), (l), (l) -> (m)',
              target='cpu', nopython=True)
 def combine(array, indexes, coeffs, out):

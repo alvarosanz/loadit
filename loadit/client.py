@@ -170,7 +170,7 @@ class DatabaseClient(BaseClient):
 
         print(self._request(request_type='restore_database', batch=batch_name)['msg'])
 
-    def query_from_file(self, file, return_dataframe=True):
+    def query_from_file(self, file, double_precision=False, return_dataframe=True):
         """
         Perform a query from a file.
 
@@ -178,6 +178,8 @@ class DatabaseClient(BaseClient):
         ----------
         file : str
             Query file.
+        double_precision : bool, optional
+            Whether to use single or double precision. By default single precision is used.
         return_dataframe : bool, optional
             Whether to return a pandas dataframe or a pyarrow RecordBatch.
 
@@ -186,15 +188,19 @@ class DatabaseClient(BaseClient):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
-        return self.query(**parse_query_file(file), return_dataframe=return_dataframe)
+        return self.query(**parse_query_file(file), double_precision=double_precision,
+                          return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, weights=None, output_file=None, return_dataframe=True, **kwargs):
+              geometry=None, weights=None, output_file=None,
+              double_precision=False, return_dataframe=True, **kwargs):
         """
         Perform a query.
 
         Parameters
         ----------
+        double_precision : bool, optional
+            Whether to use single or double precision. By default single precision is used.
         return_dataframe : bool, optional
             Whether to return a pandas dataframe or a pyarrow RecordBatch.
 
@@ -205,7 +211,8 @@ class DatabaseClient(BaseClient):
         """
         batch = self._request(request_type='query', table=table, fields=fields,
                               LIDs=LIDs, IDs=IDs, groups=groups,
-                              geometry=geometry, weights=weights)['batch']
+                              geometry=geometry, weights=weights,
+                              double_precision=double_precision)['batch']
 
         if return_dataframe:
             df = batch.to_pandas()

@@ -1,7 +1,8 @@
 from numba import guvectorize
 
 
-@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'],
+@guvectorize(['(float32[:, :], float32[:, :], float32[:, :], float32[:, :])',
+              '(float64[:, :], float64[:, :], float64[:, :], float64[:, :])'],
              '(n, m), (n, m), (n, m) -> (n, m)',
              target='cpu', nopython=True)
 def von_mises_2D(sxx, syy, sxy, out):
@@ -12,7 +13,8 @@ def von_mises_2D(sxx, syy, sxy, out):
             out[i, j] = (sxx[i, j] ** 2 + syy[i, j] ** 2 - sxx[i, j] * syy[i, j] + 3 * sxy[i, j] ** 2) ** 0.5
 
 
-@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'],
+@guvectorize(['(float32[:, :], float32[:, :], float32[:, :], float32[:, :])',
+              '(float64[:, :], float64[:, :], float64[:, :], float64[:, :])'],
              '(n, m), (n, m), (n, m) -> (n, m)',
              target='cpu', nopython=True)
 def max_ppal_2D(sxx, syy, sxy, out):
@@ -23,7 +25,8 @@ def max_ppal_2D(sxx, syy, sxy, out):
             out[i, j] = (sxx[i, j] + syy[i, j]) / 2 + (((sxx[i, j] - syy[i, j]) / 2) ** 2 + sxy[i, j] ** 2) ** 0.5
 
 
-@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'],
+@guvectorize(['(float32[:, :], float32[:, :], float32[:, :], float32[:, :])',
+              '(float64[:, :], float64[:, :], float64[:, :], float64[:, :])'],
              '(n, m), (n, m), (n, m) -> (n, m)',
              target='cpu', nopython=True)
 def min_ppal_2D(sxx, syy, sxy, out):
@@ -34,7 +37,8 @@ def min_ppal_2D(sxx, syy, sxy, out):
             out[i, j] = (sxx[i, j] + syy[i, j]) / 2 - (((sxx[i, j] - syy[i, j]) / 2) ** 2 + sxy[i, j] ** 2) ** 0.5
 
 
-@guvectorize(['(double[:, :], double[:, :], double[:, :], double[:, :])'],
+@guvectorize(['(float32[:, :], float32[:, :], float32[:, :], float32[:, :])',
+              '(float64[:, :], float64[:, :], float64[:, :], float64[:, :])'],
              '(n, m), (n, m), (n, m) -> (n, m)',
              target='cpu', nopython=True)
 def max_shear_2D(sxx, syy, sxy, out):
@@ -45,7 +49,8 @@ def max_shear_2D(sxx, syy, sxy, out):
             out[i, j] = (((sxx[i, j] - syy[i, j]) / 2) ** 2 + sxy[i, j] ** 2) ** 0.5
 
 
-@guvectorize(['(double[:, :], double[:], double[:, :])'],
+@guvectorize(['(float32[:, :], float32[:], float32[:, :])',
+              '(float64[:, :], float64[:], float64[:, :])'],
              '(n, m), (m) -> (n, m)',
              target='cpu', nopython=True)
 def stress_2D(value, thickness, out):

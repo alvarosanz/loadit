@@ -376,7 +376,7 @@ class Database(object):
         self.load()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
-    def query_from_file(self, file, return_dataframe=True):
+    def query_from_file(self, file, double_precision=False, return_dataframe=True):
         """
         Perform a query from a file.
 
@@ -384,6 +384,8 @@ class Database(object):
         ----------
         file : str
             Query file.
+        double_precision : bool, optional
+            Whether to use single or double precision. By default single precision is used.
         return_dataframe : bool, optional
             Whether to return a pandas dataframe or a pyarrow RecordBatch.
 
@@ -392,15 +394,19 @@ class Database(object):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
-        return self.query(**parse_query_file(file), return_dataframe=return_dataframe)
+        return self.query(**parse_query_file(file), double_precision=double_precision,
+                          return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, weights=None, return_dataframe=True, **kwargs):
+              geometry=None, weights=None, double_precision=False, return_dataframe=True,
+              **kwargs):
         """
         Perform a query.
 
         Parameters
         ----------
+        double_precision : bool, optional
+            Whether to use single or double precision. By default single precision is used.
         return_dataframe : bool, optional
             Whether to return a pandas dataframe or a pyarrow RecordBatch.
 
@@ -409,6 +415,12 @@ class Database(object):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
+
+        if double_precision:
+            float_dtype = np.float64
+        else:
+            float_dtype = np.float32
+
         if not fields:
             fields = [[name, list()] for name in self.tables[table].names]
 
@@ -433,7 +445,7 @@ class Database(object):
                         parameter in geometry}
 
         # Memory pre-allocation
-        mem_handler = MemoryHandler(fields, LIDs_queried, IDs_queried, groups)
+        mem_handler = MemoryHandler(fields, LIDs_queried, IDs_queried, groups, float_dtype)
 
         if mem_handler.level == 2:
             LIDs_queried_array = np.array(LIDs_queried)
@@ -449,10 +461,10 @@ class Database(object):
                     if basic_field in self.tables[table]: # Basic field
 
                         if is_absolute and basic_field not in mem_handler:
-                            mem_handler[basic_field] = self.tables[table][basic_field].read(LIDs, IDs)
+                            mem_handler[basic_field] = self.tables[table][basic_field].read(LIDs, IDs, float_dtype)
                             mem_handler[field] = mem_handler[basic_field]
                         else:
-                            self.tables[table][basic_field].read(LIDs, IDs, out=mem_handler[field])
+                            self.tables[table][basic_field].read(LIDs, IDs, float_dtype, out=mem_handler[field])
                     else: # Derived field
 
                         if basic_field in query_functions[table]:
@@ -464,9 +476,9 @@ class Database(object):
                                 if arg in self.tables[table]:
 
                                     if arg not in mem_handler:
-                                        mem_handler[arg] = self.tables[table][arg].read(LIDs, IDs)
+                                        mem_handler[arg] = self.tables[table][arg].read(LIDs, IDs, float_dtype)
                                     elif arg not in mem_handler.completed_fields:
-                                        self.tables[table][arg].read(LIDs, IDs, out=mem_handler[arg])
+                                        self.tables[table][arg].read(LIDs, IDs, float_dtype, out=mem_handler[arg])
                                         mem_handler.update(arg)
 
                                     args.append(mem_handler[arg])
@@ -559,7 +571,7 @@ class MemoryHandler(object):
     Handles memory management in queries.
     """
 
-    def __init__(self, fields, LIDs, IDs, groups=None):
+    def __init__(self, fields, LIDs, IDs, groups=None, dtype=np.float32):
         """
         Initialize a MemoryHandler instance.
 
@@ -573,6 +585,8 @@ class MemoryHandler(object):
             List of IDs.
         groups : list of str, optional
             List of group names (for aggregated queries).
+        dtype : {numpy.float32, numpy.float64}, optional
+            Field dtype. By default single precision is used.
         """
 
         # Check aggregation options
@@ -614,7 +628,7 @@ class MemoryHandler(object):
                           self.fields[level] if ': LID' not in field]
 
         # Memory pre-allocation
-        self.data0 = np.empty((len(self.fields[0]), len(LIDs), len(IDs)), dtype=np.float64)
+        self.data0 = np.empty((len(self.fields[0]), len(LIDs), len(IDs)), dtype=dtype)
 
         for i, field in enumerate(self.fields[0]):
             self._arrays[field].append(self.data0[i, :, :])
@@ -622,7 +636,7 @@ class MemoryHandler(object):
         if self.level > 0:
 
             if groups:
-                self.data1 = np.empty((len(self.fields[1]), len(LIDs), len(groups)), dtype=np.float64)
+                self.data1 = np.empty((len(self.fields[1]), len(LIDs), len(groups)), dtype=dtype)
 
                 for i, field in enumerate(self.fields[1]):
                     self._arrays[field].append(self.data1[i, :, :])
@@ -630,7 +644,7 @@ class MemoryHandler(object):
                 groups = IDs
 
             if self.level == 2:
-                self.data2 = np.empty((len(self.fields[2]), 1, len(groups)), dtype=np.float64)
+                self.data2 = np.empty((len(self.fields[2]), 1, len(groups)), dtype=dtype)
                 self.LIDs2 = np.empty((len(self.fields[2]), 1, len(groups)), dtype=np.int64)
 
                 for i, field in enumerate(self.fields[2]):
