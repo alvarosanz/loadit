@@ -442,14 +442,14 @@ class Database(object):
             iLIDs = self.tables[table]._iLIDs
             LIDs2read = [LID for LID, seq in LIDs.items() if not seq]
             LIDs_requested = set(LIDs2read)
-            LIDs2read += list({LID for seq in LIDs.values() for _, LID in seq if
+            LIDs2read += list({LID for seq in LIDs.values() for LID in seq[1::2] if
                                   LID not in LIDs_requested and LID in iLIDs})
-            LIDs_combined_used = list({LID for seq in LIDs.values() for _, LID in seq if
+            LIDs_combined_used = list({LID for seq in LIDs.values() for LID in seq[1::2] if
                                        LID not in iLIDs})
             LIDs_queried_index = {LID: i for i, LID in enumerate(LIDs2read + LIDs_combined_used)}
             LID_combinations = [(LIDs_queried_index[LID] if LID in LIDs_queried_index else None,
-                                 np.array([LIDs_queried_index[LID] for _, LID in seq], dtype=np.int64),
-                                 np.array([coeff for coeff, _ in seq], dtype=float_dtype)) for LID, seq in LIDs.items()]
+                                 np.array([LIDs_queried_index[LID] for LID in seq[1::2]], dtype=np.int64),
+                                 np.array(seq[::2], dtype=float_dtype)) for LID, seq in LIDs.items()]
         else:
             LIDs2read = LIDs
 
@@ -942,7 +942,8 @@ def parse_query_file(file):
             rows = list(csv.reader(f))
 
         if any(len(row) > 1 for row in rows):
-            query['LIDs'] = {int(row[0]): [[float(row[i]), int(row[i + 1])] for i in range(1, len(row), 2)] for row in rows}
+            query['LIDs'] = {int(row[0]): [int(value) if i % 2 else float(value) for
+                                           i, value in enumerate(row[1:])] for row in rows}
         else:
             query['LIDs'] = [int(row[0]) for row in rows]
 
