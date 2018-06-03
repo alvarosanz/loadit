@@ -7,9 +7,7 @@ import binascii
 import shutil
 import numpy as np
 import pyarrow as pa
-from numba import guvectorize
 from loadit.table_data import TableData
-from loadit.queries import query_functions
 from loadit.tables_specs import get_tables_specs
 from loadit.database_creation import create_tables, finalize_database, open_table, truncate_file
 from loadit.misc import humansize, get_hasher, hash_bytestr
@@ -130,7 +128,7 @@ class Database(object):
     Handles a local database.
     """
 
-    def __init__(self, path=None):
+    def __init__(self, path=None, max_memory=1e9):
         """
         Initialize a Database instance.
 
@@ -138,8 +136,11 @@ class Database(object):
         ----------
         path : str, optional
             Database path.
+        max_memory : int, optional
+            Memory limit (in bytes).
         """
         self.path = path
+        self.max_memory = int(max_memory)
         self.load()
 
     def load(self):
@@ -221,7 +222,7 @@ class Database(object):
 
     def create(self, files, database_path, database_name, database_version,
                database_project=None, tables_specs=None, overwrite=False,
-               table_generator=None, max_chunk_size=1e8):
+               table_generator=None):
         """
         Create a new database from .pch files.
 
@@ -243,8 +244,6 @@ class Database(object):
             Whether to rewrite or not an already existing database.
         table_generator : generator, optional
             A generator which yields tables.
-        max_chunk_size : int, optional
-            Maximum chunk size (in bytes) when dealing with database data files creation.
         """
         Path(database_path).mkdir(parents=True, exist_ok=overwrite)
         print('Creating database ...')
@@ -253,7 +252,7 @@ class Database(object):
         headers, load_cases_info = create_tables(self.path, files, tables_specs,
                                                  table_generator=table_generator)
         finalize_database(self.path, database_name, database_version, database_project,
-                          headers, load_cases_info, batches, max_chunk_size)
+                          headers, load_cases_info, batches, self.max_memory)
         self.load()
         print('Database created succesfully!')
 
@@ -286,7 +285,7 @@ class Database(object):
 
         return tables_specs
 
-    def append(self, files, batch_name, table_generator=None, max_chunk_size=1e8):
+    def append(self, files, batch_name, table_generator=None):
         """
         Append new results to database. This operation is reversible.
 
@@ -298,8 +297,6 @@ class Database(object):
             Batch name.
         table_generator : generator, optional
             A generator which yields tables.
-        max_chunk_size : int, optional
-            Maximum chunk size (in bytes) when dealing with database data files creation.
         """
 
         if batch_name in {batch_name for batch_name, _, _ in self.header.batches}:
@@ -319,11 +316,11 @@ class Database(object):
 
         self.header.batches.append([batch_name, None, [os.path.basename(file) for file in files]])
         finalize_database(self.path, self.header.name, self.header.version, self.header.project,
-                          self.header.tables, load_cases_info, self.header.batches, max_chunk_size, self.header.checksum_method)
+                          self.header.tables, load_cases_info, self.header.batches, self.max_memory, self.header.checksum_method)
         self.load()
         print('Database updated succesfully!')
 
-    def restore(self, batch_name, max_chunk_size=1e8):
+    def restore(self, batch_name):
         """
         Restore database to a previous batch. This operation is not reversible.
 
@@ -331,8 +328,6 @@ class Database(object):
         ----------
         batch_name : str
             Batch name.
-        max_chunk_size : int, optional
-            Maximum chunk size (in bytes) when dealing with database data files creation.
         """
         restore_points = [batch[0] for batch in self.header.batches]
 
@@ -372,7 +367,7 @@ class Database(object):
         finalize_database(self.path, self.header.name, self.header.version, self.header.project,
                           {name: self.header.tables[name] for name in self.tables},
                           {name: dict() for name in self.tables},
-                          self.header.batches[:batch_index + 1], max_chunk_size, self.header.checksum_method)
+                          self.header.batches[:batch_index + 1], self.max_memory, self.header.checksum_method)
         self.load()
         print(f"Database restored to '{batch_name}' state succesfully!")
 
@@ -415,6 +410,7 @@ class Database(object):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
+        from loadit.queries import query_functions, set_index
 
         if double_precision:
             float_dtype = np.float64
@@ -439,76 +435,141 @@ class Database(object):
         LIDs_queried = self.tables[table]._LIDs if LIDs is None else list(LIDs)
         IDs_queried = self.tables[table]._IDs if IDs is None else IDs
 
+        # Process LID combination data
+        LID_combinations = None
+
+        if isinstance(LIDs, dict):
+            iLIDs = self.tables[table]._iLIDs
+            LIDs2read = [LID for LID, seq in LIDs.items() if not seq]
+            LIDs_requested = set(LIDs2read)
+            LIDs2read += list({LID for seq in LIDs.values() for _, LID in seq if
+                                  LID not in LIDs_requested and LID in iLIDs})
+            LIDs_combined_used = list({LID for seq in LIDs.values() for _, LID in seq if
+                                       LID not in iLIDs})
+            LIDs_queried_index = {LID: i for i, LID in enumerate(LIDs2read + LIDs_combined_used)}
+            LID_combinations = [(LIDs_queried_index[LID] if LID in LIDs_queried_index else None,
+                                 np.array([LIDs_queried_index[LID] for _, LID in seq], dtype=np.int64),
+                                 np.array([coeff for coeff, _ in seq], dtype=float_dtype)) for LID, seq in LIDs.items()]
+        else:
+            LIDs2read = LIDs
+
         # Group data pre-processing
         if geometry:
             geometry = {parameter: np.array([geometry[parameter][ID] for ID in IDs_queried]) for
                         parameter in geometry}
 
         # Memory pre-allocation
-        mem_handler = MemoryHandler(fields, LIDs_queried, IDs_queried, groups, float_dtype)
+        mem_handler = MemoryHandler(self.max_memory, fields, LIDs_queried, IDs_queried, groups, float_dtype,
+                                    len(LIDs2read) + len(LIDs_combined_used) if LID_combinations else None)
 
-        if mem_handler.level == 2:
-            LIDs_queried_array = np.array(LIDs_queried)
+        # Process batches
+        for i, batch_slice in enumerate(mem_handler.batches):
+            # Process batch information
+            read_fields = True
 
-        # Process fields
-        for field, level in mem_handler.field_seq:
+            if LID_combinations:
 
-            if field not in mem_handler.completed_fields:
+                if i == 0:
+                    LIDs2read_batch = LIDs2read
+                else:
+                    read_fields = False
 
-                if level == 0: # Load fields into memory
-                    basic_field, is_absolute = is_abs(field)
+                if batch_slice:
+                    LID_combinations_batch = LID_combinations[batch_slice]
+                else:
+                    LID_combinations_batch = LID_combinations
+            else:
 
-                    if basic_field in self.tables[table]: # Basic field
+                if batch_slice:
+                    LIDs2read_batch = LIDs_queried[batch_slice]
+                else:
+                    LIDs2read_batch = LIDs2read
 
-                        if is_absolute and basic_field not in mem_handler:
-                            mem_handler[basic_field] = self.tables[table][basic_field].read(LIDs, IDs, float_dtype)
-                            mem_handler[field] = mem_handler[basic_field]
-                        else:
-                            self.tables[table][basic_field].read(LIDs, IDs, float_dtype, out=mem_handler[field])
-                    else: # Derived field
+            if batch_slice:
+                LIDs_queried_batch = np.array(LIDs_queried[batch_slice])
+            else:
+                LIDs_queried_batch = np.array(LIDs_queried)
 
-                        if basic_field in query_functions[table]:
-                            func, func_args = query_functions[table][basic_field]
-                            args = list()
+            # Process fields
+            fields_processed = set()
 
-                            for arg in func_args:
+            for field, level in mem_handler.field_seq:
 
-                                if arg in self.tables[table]:
+                if field not in fields_processed:
 
-                                    if arg not in mem_handler:
-                                        mem_handler[arg] = self.tables[table][arg].read(LIDs, IDs, float_dtype)
-                                    elif arg not in mem_handler.completed_fields:
-                                        self.tables[table][arg].read(LIDs, IDs, float_dtype, out=mem_handler[arg])
-                                        mem_handler.update(arg)
+                    if level == 0: # Load fields into memory
+                        basic_field, is_absolute = is_abs(field)
 
-                                    args.append(mem_handler[arg])
-                                else:
-                                    args.append(geometry[arg])
+                        if basic_field in self.tables[table]: # Basic field
 
-                            func(*args, mem_handler[field])
-                        else:
-                            raise ValueError(f"Unsupported output: '{basic_field}'")
+                            if basic_field not in mem_handler:
+                                mem_handler.add(basic_field)
 
-                else: # Field aggregation
-                    aggregation, is_absolute = is_abs(field.split('-')[-1])
-                    array = mem_handler['-'.join(field.split('-')[:-1])]
-                    array_agg = mem_handler[field]
+                            if read_fields:
+                                self.tables[table][basic_field].read(mem_handler.get(basic_field, i, True), LIDs2read_batch, IDs)
 
-                    if level == 1: # 1st level
+                            if LID_combinations:
+                                combine_load_cases(mem_handler.get(basic_field, i, True),
+                                                   LID_combinations_batch, mem_handler.get(basic_field, i))
 
-                        for j, group in enumerate(groups):
-                            aggregate(array[:, indexes_by_group[group]],
-                                      array_agg[:, j], aggregation, level,
-                                      weights_by_group[group] if weights else None)
+                            fields_processed.add(basic_field)
+                        else: # Derived field
 
-                    elif level == 2: # 2nd level
-                        aggregate(array, array_agg, aggregation, level,
-                                  LIDs_queried_array, mem_handler[field + ': LID'])
+                            if basic_field in query_functions[table]:
+                                func, func_args = query_functions[table][basic_field]
+                                args = list()
 
-                if is_absolute:
-                    np.abs(mem_handler[field], out=mem_handler[field])
+                                for arg in func_args:
 
-                mem_handler.update(field)
+                                    if arg in self.tables[table]:
+
+                                        if arg not in mem_handler:
+                                            mem_handler.add(arg)
+
+                                        if arg not in fields_processed:
+
+                                            if read_fields:
+                                                self.tables[table][arg].read(mem_handler.get(arg, i, True), LIDs2read_batch, IDs)
+
+                                            if LID_combinations:
+                                                combine_load_cases(mem_handler.get(arg, i, True),
+                                                                   LID_combinations_batch, mem_handler.get(arg, i))
+
+                                            fields_processed.add(arg)
+
+                                        args.append(mem_handler.get(arg, i))
+                                    else:
+                                        args.append(geometry[arg])
+
+                                func(*args, mem_handler.get(field, i))
+                            else:
+                                raise ValueError(f"Unsupported output: '{basic_field}'")
+
+                    else: # Field aggregation
+                        aggregation, is_absolute = is_abs(field.split('-')[-1])
+                        array = mem_handler.get('-'.join(field.split('-')[:-1]), i)
+                        array_agg = mem_handler.get(field, i)
+                        basic_field = field
+
+                        if level == 1: # 1st level
+
+                            for j, group in enumerate(groups):
+                                aggregate(array[:, indexes_by_group[group]],
+                                          array_agg[:, j], aggregation, level,
+                                          weights_by_group[group] if weights else None)
+
+                        elif level == 2: # 2nd level
+                            aggregate(array, array_agg, aggregation, level,
+                                      LIDs_queried_batch, mem_handler.get(field + ': LID'),
+                                      use_previous_agg= i > 0)
+
+                    # Absolute value
+                    if is_absolute:
+                        np.abs(mem_handler.get(basic_field, i), out=mem_handler.get(field, i))
+
+                    fields_processed.add(field)
+
+        mem_handler.update()
 
         # DataFrame creation
         if mem_handler.level == 0:
@@ -529,7 +590,7 @@ class Database(object):
                 groups = IDs_queried
 
             columns = [field + suffix for field in mem_handler.fields[2] for suffix in ('', ': LID')]
-            data = {field: mem_handler[field].ravel() for field in columns}
+            data = {field: mem_handler.get(field).ravel() for field in columns}
 
         if return_dataframe:
             import pandas as pd
@@ -571,12 +632,15 @@ class MemoryHandler(object):
     Handles memory management in queries.
     """
 
-    def __init__(self, fields, LIDs, IDs, groups=None, dtype=np.float32):
+    def __init__(self, max_memory, fields, LIDs, IDs, groups=None, dtype=np.float32,
+                 n_basic_LIDs=None):
         """
         Initialize a MemoryHandler instance.
 
         Parameters
         ----------
+        max_memory : int
+            Memory limit (in bytes).
         fields : list of str
             List of fields.
         LIDs : list of int
@@ -587,6 +651,10 @@ class MemoryHandler(object):
             List of group names (for aggregated queries).
         dtype : {numpy.float32, numpy.float64}, optional
             Field dtype. By default single precision is used.
+        n_basic_LIDs : int, optional
+            Number of basic LIDs (either LIDs not combined or
+            combined ones used later by other combinations) to be allocated.
+            By default no basic load cases arrays are allocated.
         """
 
         # Check aggregation options
@@ -605,7 +673,6 @@ class MemoryHandler(object):
         # Field processing
         self._arrays = dict()
         self.fields = {0: list(), 1: list(), 2: list()}
-        self.completed_fields = set()
 
         for field in fields:
 
@@ -627,8 +694,30 @@ class MemoryHandler(object):
         self.field_seq = [(field, level) for level in self.fields for field in
                           self.fields[level] if ': LID' not in field]
 
+        # Batch processing (in case query doesn't fit in memory)
+        size_per_LC = len(self.fields[0]) * len(IDs) * np.dtype(dtype).itemsize
+
+        if size_per_LC * len(LIDs) > max_memory:
+
+            if self.level < 2:
+                raise MemoryError(f'Requested query exceeds max memory limit ({humansize(max_memory)})!')
+
+            LIDs_per_batch = max_memory // size_per_LC
+            self.batches = [slice(i * LIDs_per_batch, (i + 1) * LIDs_per_batch) for i in
+                            range(len(LIDs) // LIDs_per_batch)]
+
+            if len(LIDs) % LIDs_per_batch:
+                self.batches.append(slice(self.batches[-1].stop,
+                                          self.batches[-1].stop + len(LIDs) % LIDs_per_batch))
+
+        else:
+            LIDs_per_batch = len(LIDs)
+            self.batches = [None]
+
         # Memory pre-allocation
-        self.data0 = np.empty((len(self.fields[0]), len(LIDs), len(IDs)), dtype=dtype)
+        self.dtype = dtype
+        self.shape = (LIDs_per_batch, len(IDs))
+        self.data0 = np.empty((len(self.fields[0]), LIDs_per_batch, len(IDs)), dtype=dtype)
 
         for i, field in enumerate(self.fields[0]):
             self._arrays[field].append(self.data0[i, :, :])
@@ -636,7 +725,7 @@ class MemoryHandler(object):
         if self.level > 0:
 
             if groups:
-                self.data1 = np.empty((len(self.fields[1]), len(LIDs), len(groups)), dtype=dtype)
+                self.data1 = np.empty((len(self.fields[1]), LIDs_per_batch, len(groups)), dtype=dtype)
 
                 for i, field in enumerate(self.fields[1]):
                     self._arrays[field].append(self.data1[i, :, :])
@@ -651,17 +740,28 @@ class MemoryHandler(object):
                     self._arrays[field].append(self.data2[i, :, :])
                     self._arrays[field + ': LID'].append(self.LIDs2[i, :, :])
 
-    def update(self, field):
+        # Memory pre-allocation: Basic load cases (used only when combining load cases)
+        if n_basic_LIDs:
+            self.shape_basic = (n_basic_LIDs, len(IDs))
+            self._arrays_basic = {field: np.empty(self.shape_basic, dtype=dtype) for field in self.fields[0]}
+
+    def add(self, field):
         """
-        Copy data from one array to the other associated arrays (if any).
+        Allocate additional field arrays.
+
+        Parameters
+        ----------
+        field : str
+            Field name.
         """
+        self._arrays[field] = [np.empty(self.shape, dtype=self.dtype)]
 
-        for array in self._arrays[field][1:]:
-                array[:] = self._arrays[field][0]
+        try:
+            self._arrays_basic[field] = np.empty(self.shape_basic, dtype=self.dtype)
+        except AttributeError:
+            pass
 
-        self.completed_fields.add(field)
-
-    def __getitem__(self, field):
+    def get(self, field, batch=None, basic_field=False):
         """
         Get a view array for the specified field.
 
@@ -669,35 +769,39 @@ class MemoryHandler(object):
         ----------
         field : str
             Field name.
+        batch : int, optional
+            Batch number. By default a view of the whole array is returned.
+        basic_field : bool, optional
+            Whether to get a view of the underlying basic field array or not.
 
         Returns
         -------
         numpy.array
             View array for the specified field.
         """
-        return self._arrays[field][0]
 
-    def __setitem__(self, field, value):
+        if basic_field:
+
+            try:
+                return self._arrays_basic[field]
+            except AttributeError:
+                array = self._arrays[field][0]
+        else:
+            array = self._arrays[field][0]
+
+        if self.batches[0] and not batch is None:
+            return array[:self.batches[batch].stop - self.batches[batch].start, :]
+        else:
+            return array
+
+    def update(self):
         """
-        Copy data to the arrays associated with a field.
-
-        Parameters
-        ----------
-        field : str
-            Field name.
-        value : numpy.array
-            Field array.
+        Copy data to all associated arrays (if any).
         """
+        for field in self._arrays:
 
-        try:
-
-            for array in self._arrays[field]:
-                array[:] = value
-
-        except KeyError:
-            self._arrays[field] = [value]
-
-        self.completed_fields.add(field)
+            for array in self._arrays[field][1:]:
+                    array[:] = self._arrays[field][0]
 
     def __contains__(self, field):
         """
@@ -706,14 +810,51 @@ class MemoryHandler(object):
         return field in self._arrays
 
 
-def aggregate(array, array_agg, aggregation, level, LIDs=None, LIDs_agg=None, weights=None):
+def combine_load_cases(load_cases, LID_combinations, out):
+    """
+    Combine load cases.
+
+    Parameters
+    ----------
+    load_cases : numpy.array
+        Basic load cases array (either LIDs not combined or combined ones used later
+        by other combinations).
+    LID_combinations : list of [int, numpy.array, numpy.array]
+        Each component of the list contains the following information:
+
+            [index, indexes, coeffs]
+
+        Where:
+            index: Index of the basic combined load case (None for basic non-combined load cases).
+            indexes: Indexes of each load case to combine.
+            coeffs: Coefficients of each load case to combine.
+
+    out : numpy.array
+        Combined load case array.
+    """
+    from loadit.queries import combine
+
+    for i, (index, indexes, coeffs) in enumerate(LID_combinations):
+
+        if len(coeffs): # Combined load case
+            combine(load_cases, indexes, coeffs, out[i, :])
+
+            if index: # Store it in order to be used in the future
+                load_cases[index, :] = out[i, :]
+
+        else: # Pure load case (not required to combine)
+            out[i, :] = load_cases[index, :]
+
+
+def aggregate(array, array_agg, aggregation, level, LIDs=None, LIDs_agg=None, weights=None,
+              use_previous_agg=False):
     """
     Aggregate array (AVG, MAX or MIN).
 
     Parameters
     ----------
     array : numpy.array
-        Array to be aggregated.
+        Array to be aggregated (one row for each load case).
     array_agg : numpy.array
         Aggregated array.
     aggregation : str {'AVG', 'MAX', 'MIN'}
@@ -721,60 +862,39 @@ def aggregate(array, array_agg, aggregation, level, LIDs=None, LIDs_agg=None, we
     level : int {1, 2}
         Aggregation level.
     LIDs : numpy.array, optional
-        Array of LIDs related to 'array'.
+        Array of LIDs related to `array`.
     LIDs_agg : numpy.array, optional
         Array of critical LIDs (only for level = 2).
     weights : numpy.array, optional
         Array of averaging weights (only for aggregation = 'AVG' level = 1).
+    use_previous_agg : bool, optional
+        Whether to perform level-2 aggregations taking into account
+        previous aggregations stored at `array_agg` and `LIDs_agg` or not.
     """
-    axis = 2 - level
+    from loadit.queries import max_load, min_load
 
     if aggregation == 'AVG':
 
-        if axis == 0:
+        if level == 2:
             raise ValueError("'AVG' aggregation cannot be applied to LIDs!")
+        else:
+            array_agg[:] = np.average(array, 1, weights)
 
-        array_agg[:] = np.average(array, axis, weights)
     elif aggregation == 'MAX':
 
-        if axis == 0:
-            LIDs_agg[:] = LIDs[array.argmax(axis)]
+        if level == 2:
+            max_load(array, LIDs, use_previous_agg, array_agg, LIDs_agg)
+        else:
+            array_agg[:] = np.max(array, 1)
 
-        array_agg[:] = np.max(array, axis)
     elif aggregation == 'MIN':
 
-        if axis == 0:
-            LIDs_agg[:] = LIDs[array.argmin(axis)]
-
-        array_agg[:] = np.min(array, axis)
+        if level == 2:
+            min_load(array, LIDs, use_previous_agg, array_agg, LIDs_agg)
+        else:
+            array_agg[:] = np.min(array, 1)
     else:
         raise ValueError(f"Unsupported aggregation method: '{aggregation}'")
-
-
-@guvectorize(['(int64[:], int64[:], int64[:, :], int64[:, :])'],
-             '(n), (m) -> (n, m), (n, m)',
-             target='cpu', nopython=True)
-def set_index(index0, index1, out0, out1):
-    """
-    Set index columns as a combination of both.
-
-    Parameters
-    ----------
-    index0 : numpy.array
-        First index column non-combined (i.e. [10, 20, 30]).
-    index1 : numpy.array
-        Second index column non-combined (i.e. [1, 2]).
-    out0 : numpy.array
-        First index column combined (i.e. [10, 10, 20, 20, 30, 30]).
-    out1 : numpy.array
-        Second index column combined (i.e. [1, 2, 1, 2, 1, 2]).
-    """
-
-    for i in range(len(index0)):
-
-        for j in range(len(index1)):
-            out0[i, j] = index0[i]
-            out1[i, j] = index1[j]
 
 
 def is_abs(field):

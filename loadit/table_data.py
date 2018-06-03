@@ -21,9 +21,9 @@ class TableData(object):
         """
         self._LIDs = LIDs
         self._IDs = IDs
-        iLIDs = {LID: i for i, LID in enumerate(LIDs)}
-        iIDs = {ID: i for i, ID in enumerate(IDs)}
-        self._fields = {name: FieldData(name, dtype, file, LIDs, IDs, iLIDs, iIDs) for
+        self._iLIDs = {LID: i for i, LID in enumerate(LIDs)}
+        self._iIDs = {ID: i for i, ID in enumerate(IDs)}
+        self._fields = {name: FieldData(name, dtype, file, LIDs, IDs, self._iLIDs, self._iIDs) for
                         name, dtype, file in fields}
 
     @property
