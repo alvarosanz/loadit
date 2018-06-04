@@ -1,34 +1,31 @@
 import os
 import time
 import argparse
-
-
-parser = argparse.ArgumentParser(description='Perform a query', epilog='You will be asked to login')
-parser.add_argument('query_files', nargs='+',
-                    help='JSON formatted file/s holding the query parameters')
-
-args = parser.parse_args()
-
-
 import loadit
 
 
-client = None
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Perform a query', epilog='You will be asked to login')
+    parser.add_argument('query_files', nargs='+',
+                        help='JSON formatted file/s holding the query parameters')
+    args = parser.parse_args()
 
-for i, file in enumerate(args.query_files):
-    query = loadit.parse_query_file(file)
+    client = None
 
-    if not client:
-        client = loadit.Client((query['host'], query['port']))
-        client.load(query['path'])
-        start_time = time.time()
+    for i, file in enumerate(args.query_files):
+        query = loadit.parse_query_file(file)
 
-    print(f"Performing query '{os.path.basename(file)}' ({i + 1} of {len(args.query_files)}) ...")
+        if not client:
+            client = loadit.Client((query['host'], query['port']))
+            client.load(query['path'])
+            start_time = time.time()
 
-    if not query['output_file']:
-        print('WARNING: No output_file specified!')
-        continue
+        print(f"Performing query '{os.path.basename(file)}' ({i + 1} of {len(args.query_files)}) ...")
 
-    client.database.query(**query)
+        if not query['output_file']:
+            print('WARNING: No output_file specified!')
+            continue
 
-print(f"{time.time() - start_time} seconds")
+        client.database.query(**query)
+
+    print(f"{time.time() - start_time} seconds")
