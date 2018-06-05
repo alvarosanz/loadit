@@ -145,4 +145,4 @@ Shutdown the cluster::
 
 Contact
 =======
-Álvaro Sanz Oriz – alvaro.sanz.oriz@gmail.com
+Alvaro Sanz Oriz – alvaro.sanz.oriz@gmail.com
