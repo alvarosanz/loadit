@@ -152,10 +152,8 @@ def create_transpose(header, max_chunk_size):
         field_file = os.path.join(header['path'], field + '.bin')
         n_LIDs = len(header['LIDs'])
         n_IDs = len(header['IDs'])
-        dtype_size = np.dtype(dtype).itemsize
-        field_array = np.memmap(field_file, dtype=dtype, shape=(n_LIDs, n_IDs),
-                                mode='r')
-        n_IDs_per_chunk = int(max_chunk_size // (n_LIDs * dtype_size))
+        field_array = np.memmap(field_file, dtype=dtype, shape=(n_LIDs, n_IDs), mode='r')
+        n_IDs_per_chunk = int(max_chunk_size // (n_LIDs * np.dtype(dtype).itemsize))
         n_chunks = int(n_IDs // n_IDs_per_chunk)
         n_IDs_last_chunk = int(n_IDs % n_IDs_per_chunk)
 
