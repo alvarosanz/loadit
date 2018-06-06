@@ -91,7 +91,6 @@ def append_to_table(table, header):
         print(f'WARNING: Subcase already in the database! It will be skipped (LID: {LID})')
         return False
 
-    header['LIDs'].append(LID)
     IDs = table.data[header['columns'][1][0]]
     index = None
 
@@ -109,6 +108,8 @@ def append_to_table(table, header):
 
         if len(index) < len(IDs):
             print(f'WARNING: Additional {label}/s found! These will be ommitted (LID: {LID})')
+
+    header['LIDs'].append(LID)
 
     for field, _ in header['columns'][2:]:
 
