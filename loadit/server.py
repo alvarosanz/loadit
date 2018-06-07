@@ -664,7 +664,7 @@ def get_local_databases(root_path):
     databases = dict()
 
     for header_file in Path(root_path).glob('**/##header.json'):
-        database = str(header_file.parent.relative_to(root_path))
+        database = str(header_file.parent.relative_to(root_path).as_posix())
         databases[database] = get_database_hash(header_file)
 
     return databases
