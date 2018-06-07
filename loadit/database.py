@@ -180,12 +180,13 @@ class Database(object):
         for name, header in self.header.tables.items():
 
             # Check table fields integrity
-            for file, checksum in header['batches'][-1][2].items():
+            for filename, checksum in header['batches'][-1][2].items():
+                field_file = os.path.join(self.path, name, filename)
 
-                with open(os.path.join(self.path, name, file), 'rb') as f:
+                with open(field_file, 'rb') as f:
 
                     if checksum != hash_bytestr(f, get_hasher(self.header.checksum_method)):
-                        files_corrupted.append(file)
+                        files_corrupted.append(field_file)
 
             # Check table header integrity
             header_file = os.path.join(self.path, name, '#header.json')
@@ -209,7 +210,7 @@ class Database(object):
         if files_corrupted:
 
             for file in files_corrupted:
-                info.append(f"'{file.replace(self.path, '')}' is corrupted!")
+                info.append(f"'{Path(file).relative_to(self.path).as_posix()}' is corrupted!")
         else:
             info.append('Everything is OK!')
 
@@ -249,8 +250,14 @@ class Database(object):
         print('Creating database ...')
         self.path = database_path
         batches = [['Initial batch', None, [os.path.basename(file) for file in files]]]
-        headers, load_cases_info = create_tables(self.path, files, tables_specs,
-                                                 table_generator=table_generator)
+
+        try:
+            headers, load_cases_info = create_tables(self.path, files, tables_specs,
+                                                     table_generator=table_generator)
+        except Exception as e: # Delete database if something unexpected happens
+            shutil.rmtree(self.path)
+            raise e
+
         finalize_database(self.path, database_name, database_version, database_project,
                           headers, load_cases_info, batches, self.max_memory)
         self.load()
@@ -310,9 +317,14 @@ class Database(object):
             header['path'] = os.path.join(self.path, header['name'])
             open_table(header, new_table=False)
 
-        _, load_cases_info = create_tables(self.path, files, self._get_tables_specs(), self.header.tables,
-                                           load_cases_info={name: dict() for name in self.tables},
-                                           table_generator=table_generator)
+        try:
+            _, load_cases_info = create_tables(self.path, files, self._get_tables_specs(), self.header.tables,
+                                               load_cases_info={name: dict() for name in self.tables},
+                                               table_generator=table_generator)
+        except Exception as e: # Restore database if something unexpected happens
+            self.load()
+            self.restore(self.header.batches[-1][0])
+            raise e
 
         self.header.batches.append([batch_name, None, [os.path.basename(file) for file in files]])
         finalize_database(self.path, self.header.name, self.header.version, self.header.project,
@@ -331,7 +343,7 @@ class Database(object):
         """
         restore_points = [batch[0] for batch in self.header.batches]
 
-        if batch_name not in restore_points or batch_name == restore_points[-1]:
+        if batch_name not in restore_points:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
         print(f"Restoring database to '{batch_name}' state ...")
@@ -358,11 +370,11 @@ class Database(object):
                     truncate_file(os.path.join(self.path, name, field + '.bin'),
                                   position * np.dtype(dtype).itemsize * len(header['IDs']))
 
-                header['path'] = os.path.join(self.path, header['name'])
+                header['path'] = os.path.join(self.path, name)
 
             except ValueError:
                 del self.tables[name]
-                shutil.rmtree(self.path, name)
+                shutil.rmtree(os.path.join(self.path, name))
 
         finalize_database(self.path, self.header.name, self.header.version, self.header.project,
                           {name: self.header.tables[name] for name in self.tables},

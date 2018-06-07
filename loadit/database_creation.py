@@ -61,6 +61,10 @@ def create_tables(database_path, files, tables_specs=None,
         for header in headers.values():
             close_table(header)
 
+    for header in headers.values():
+        np.array(header['LIDs']).tofile(os.path.join(header['path'], header['columns'][0][0] + '.bin'))
+        np.array(header['IDs']).tofile(os.path.join(header['path'], header['columns'][1][0] + '.bin'))
+
     return headers, load_cases_info
 
 
@@ -122,8 +126,6 @@ def append_to_table(table, header):
 
 
 def close_table(header):
-    np.array(header['LIDs']).tofile(os.path.join(header['path'], header['columns'][0][0] + '.bin'))
-    np.array(header['IDs']).tofile(os.path.join(header['path'], header['columns'][1][0] + '.bin'))
 
     try:
 
