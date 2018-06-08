@@ -68,6 +68,7 @@ class BaseClient(object):
 
             elif kwargs['request_type'] in ('create_database', 'append_to_database'):
                 connection.send_tables(kwargs['files'], data)
+                print(f"Assembling database ...")
                 data = connection.recv()
             elif kwargs['request_type'] == 'query':
                 data['batch'] = connection.recv_batch()

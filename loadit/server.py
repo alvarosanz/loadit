@@ -334,15 +334,18 @@ class CentralServer(DatabaseServer):
             if node.backup:
                 info[-1] += ' (backup mode)'
 
-        info.append(f"\n{len(self.databases)} databases:")
+        if self.databases:
+            info.append(f"\n{len(self.databases)} databases:")
 
-        for database in self.databases:
+            for database in self.databases:
 
-            if not self.current_session['is_admin'] and (not self.current_session['databases'] or
-                                                         database not in self.current_session['databases']):
-                info.append(f"  '{database}' [read-only]")
-            else:
-                info.append(f"  '{database}'")
+                if not self.current_session['is_admin'] and (not self.current_session['databases'] or
+                                                             database not in self.current_session['databases']):
+                    info.append(f"  '{database}' [read-only]")
+                else:
+                    info.append(f"  '{database}'")
+        else:
+            info.append(f"\nNo databases")
 
         info = '\n'.join(info)
 
