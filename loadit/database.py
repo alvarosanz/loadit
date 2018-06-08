@@ -430,7 +430,7 @@ class Database(object):
             float_dtype = np.float32
 
         if not fields:
-            fields = [[name, list()] for name in self.tables[table].names]
+            fields = self.tables[table].fields
 
         # Group data pre-processing
         if groups:

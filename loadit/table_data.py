@@ -34,6 +34,10 @@ class TableData(object):
     def IDs(self):
         return np.array(self._IDs)
 
+    @property
+    def fields(self):
+        return list(self._fields)
+
     def __getitem__(self, field):
         return self._fields[field]
 
