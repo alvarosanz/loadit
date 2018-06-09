@@ -1,4 +1,8 @@
 from numba import guvectorize
+import numpy as np
+
+
+np.seterr(invalid='ignore') # Ignore nan warnings
 
 
 @guvectorize(['(int64[:], int64[:], int64[:, :], int64[:, :])'],
@@ -52,7 +56,7 @@ def max_load(array, LIDs, use_previous_agg, out, LIDs_out):
 
     for j in range(array.shape[1]):
 
-        if not use_previous_agg or array[0, j] > out[j]:
+        if not use_previous_agg or array[0, j] > out[j] or np.isnan(out[j]):
             out[j] = array[0, j]
             LIDs_out[j] = LIDs[0]
 
@@ -60,7 +64,7 @@ def max_load(array, LIDs, use_previous_agg, out, LIDs_out):
 
         for j in range(array.shape[1]):
 
-            if array[i, j] > out[j]:
+            if array[i, j] > out[j] or np.isnan(out[j]):
                 out[j] = array[i, j]
                 LIDs_out[j] = LIDs[i]
 
@@ -90,7 +94,7 @@ def min_load(array, LIDs, use_previous_agg, out, LIDs_out):
 
     for j in range(array.shape[1]):
 
-        if not use_previous_agg or array[0, j] < out[j]:
+        if not use_previous_agg or array[0, j] < out[j] or np.isnan(out[j]):
             out[j] = array[0, j]
             LIDs_out[j] = LIDs[0]
 
@@ -98,7 +102,7 @@ def min_load(array, LIDs, use_previous_agg, out, LIDs_out):
 
         for j in range(array.shape[1]):
 
-            if array[i, j] < out[j]:
+            if array[i, j] < out[j] or np.isnan(out[j]):
                 out[j] = array[i, j]
                 LIDs_out[j] = LIDs[i]
 

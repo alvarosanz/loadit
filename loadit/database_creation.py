@@ -89,39 +89,41 @@ def open_table(header, new_table=False):
 
 
 def append_to_table(table, header):
-    LID = table.data[header['columns'][0][0]][0]
+    LID_label = header['columns'][0][0]
+    ID_label = header['columns'][1][0]
+
+    LID = table.data[LID_label][0]
 
     if LID in header['LIDs']:
-        print(f'WARNING: Subcase already in the database! It will be skipped (LID: {LID})')
+        print("WARNING: Subcase already in the database! It will be skipped (LID: {}, table: '{}')".format(LID, header['name']))
         return False
 
-    IDs = table.data[header['columns'][1][0]]
-    index = None
+    IDs = table.data[ID_label]
 
     if header['IDs'] is None:
         header['IDs'] = IDs
-    elif not np.array_equal(header['IDs'], IDs):
-        iIDs = {ID: i for i, ID in enumerate(IDs)}
-        label = header['columns'][1][0]
+        header['iIDs'] = {ID: i for i, ID in enumerate(IDs)}
 
-        try:
-            index = np.array([iIDs[ID] for ID in header['IDs']])
-        except KeyError:
-            print(f'WARNING: Missing {label}/s! The whole subcase will be omitted (LID: {LID})')
-            return False
+    if np.array_equal(header['IDs'], IDs):
 
-        if len(index) < len(IDs):
-            print(f'WARNING: Additional {label}/s found! These will be ommitted (LID: {LID})')
+        for field, dtype in header['columns'][2:]:
+            table.data[field].tofile(header['files'][field])
+
+    else:
+        indexes = {header['iIDs'][ID]: i for i, ID in enumerate(IDs) if ID in header['iIDs']}
+
+        if len(indexes) < len(header['IDs']) or len(IDs) != len(header['IDs']):
+            print("WARNING: Inconsistent {}/s (LID: {}, table: '{}')".format(ID_label, LID, header['name']))
+
+        for field, dtype in header['columns'][2:]:
+            field_array = np.full(len(header['IDs']), np.nan, dtype=dtype)
+
+            for index0, index1 in indexes.items():
+                field_array[index0] = table.data[field][index1]
+
+            field_array.tofile(header['files'][field])
 
     header['LIDs'].append(LID)
-
-    for field, _ in header['columns'][2:]:
-
-        if index is None:
-            table.data[field].tofile(header['files'][field])
-        else:
-            table.data[field][index].tofile(header['files'][field])
-
     return True
 
 
