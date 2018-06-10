@@ -89,11 +89,14 @@ class Connection(object):
             raise ConnectionError(buffer.read().decode())
 
     def send_batch(self, batch):
-        writer = pa.RecordBatchStreamWriter(self.socket.makefile('wb'), batch.schema)
+        sink = pa.BufferOutputStream()
+        writer = pa.RecordBatchStreamWriter(sink, batch.schema)
         writer.write_batch(batch)
+        writer.close()
+        self.send(sink.get_result())
 
     def recv_batch(self):
-        reader = pa.RecordBatchStreamReader(self.socket.makefile('rb'))
+        reader = pa.RecordBatchStreamReader(pa.BufferReader(self.recv().getbuffer()))
         return reader.read_next_batch()
 
     def send_tables(self, files, tables_specs):
