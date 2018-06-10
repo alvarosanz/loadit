@@ -7,15 +7,8 @@ from loadit.tables_specs import get_tables_specs
 from loadit.misc import get_hasher, hash_bytestr
 
 
-def create_tables(database_path, files, tables_specs=None,
-                  headers=None, load_cases_info=None,
+def create_tables(database_path, files, headers, tables_specs=None,
                   table_generator=None):
-
-    if headers is None:
-        headers = dict()
-
-    if load_cases_info is None:
-        load_cases_info = dict()
 
     if not tables_specs:
         tables_specs = get_tables_specs()
@@ -39,7 +32,6 @@ def create_tables(database_path, files, tables_specs=None,
                 continue
 
             if table.name not in headers:
-                load_cases_info[table.name] = dict()
                 headers[table.name] = {
                     'name': table.name,
                     'path': os.path.join(database_path, table.name),
@@ -49,13 +41,9 @@ def create_tables(database_path, files, tables_specs=None,
                     'LIDs': list(),
                     'IDs': None
                 }
-
                 open_table(headers[table.name], new_table=True)
 
-            if append_to_table(table, headers[table.name]):
-                load_cases_info[table.name][table.subcase] = {'TITLE': table.title,
-                                                              'SUBTITLE': table.subtitle,
-                                                              'LABEL': table.label}
+            append_to_table(table, headers[table.name])
     finally:
 
         for header in headers.values():
@@ -64,8 +52,6 @@ def create_tables(database_path, files, tables_specs=None,
     for header in headers.values():
         np.array(header['LIDs']).tofile(os.path.join(header['path'], header['columns'][0][0] + '.bin'))
         np.array(header['IDs']).tofile(os.path.join(header['path'], header['columns'][1][0] + '.bin'))
-
-    return headers, load_cases_info
 
 
 def open_table(header, new_table=False):
@@ -140,12 +126,12 @@ def close_table(header):
         pass
 
 
-def finalize_database(database_path, database_name, database_version, database_project,
-                       headers, load_cases_info, batches, max_chunk_size, checksum_method='sha256'):
+def assembly_database(database_path, database_name, database_version, database_project,
+                      headers, batches, max_chunk_size, checksum_method='sha256'):
 
     for name, header in headers.items():
         create_transpose(header, max_chunk_size)
-        create_table_header(header, load_cases_info[name], batches[-1][0], checksum_method)
+        create_table_header(header, batches[-1][0], checksum_method)
 
     create_database_header(database_path, database_name, database_version,
                            database_project, headers, batches, checksum_method)
@@ -186,48 +172,8 @@ def create_transpose(header, max_chunk_size):
                 i0 += n_IDs_per_chunk
 
 
-def create_table_header(header, load_cases_info, batch_name, checksum_method):
-    table_header = dict()
-    table_header['name'] = header['name']
-    table_header['columns'] = header['columns']
-    set_restore_points(header, batch_name, checksum_method)
-    table_header['batches'] = header['batches']
-
-    common_items = dict()
-
-    for item in ['TITLE', 'SUBTITLE', 'LABEL']:
-
-        if item in header:
-            common_items[item] = header[item]
-        else:
-            common_items[item] = None
-            unique_values = {load_case_info[item] for load_case_info in
-                             load_cases_info.values()}
-
-            if len(unique_values) == 1:
-                common_items[item] = unique_values.pop()
-
-                if common_items[item]:
-                    table_header[item] = common_items[item]
-
-    table_header['LOAD CASES INFO'] = dict()
-
-    for LID in sorted(load_cases_info):
-
-        if any(item for item in load_cases_info[LID].values()):
-            table_header['LOAD CASES INFO'][LID] = dict()
-
-            for item in ['TITLE', 'SUBTITLE', 'LABEL']:
-
-                if load_cases_info[LID][item] and load_cases_info[LID][item] != common_items[item]:
-                    table_header['LOAD CASES INFO'][LID][item] = load_cases_info[LID][item]
-
-    with open(os.path.join(header['path'], '#header.json'), 'w') as f:
-        json.dump(table_header, f, indent=4)
-
-
-def set_restore_points(header, batch_name, checksum_method):
-
+def create_table_header(header, batch_name, checksum_method):
+    # Set restore points
     if header['batches'] and header['batches'][-1][0] == batch_name:
         check = True
     else:
@@ -247,6 +193,15 @@ def set_restore_points(header, batch_name, checksum_method):
 
             else:
                 header['batches'][-1][2][field + '.bin'] = hash_bytestr(f, get_hasher(checksum_method))
+
+    table_header = {
+        'name': header['name'],
+        'columns': header['columns'],
+        'batches': header['batches']
+    }
+
+    with open(os.path.join(header['path'], '#header.json'), 'w') as f:
+        json.dump(table_header, f, indent=4)
 
 
 def create_database_header(database_path, database_name, database_version,
@@ -280,10 +235,3 @@ def create_database_header(database_path, database_name, database_version,
 
     with open(database_header_file, 'rb') as f_in, open(os.path.splitext(database_header_file)[0] + '.' + checksum_method, 'wb') as f_out:
         f_out.write(hash_bytestr(f_in, get_hasher(checksum_method), ashexstr=False))
-
-
-def truncate_file(file, offset):
-
-    with open(file, 'rb+') as f:
-        f.seek(offset)
-        f.truncate()

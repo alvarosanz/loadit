@@ -9,7 +9,7 @@ import numpy as np
 import pyarrow as pa
 from loadit.table_data import TableData
 from loadit.tables_specs import get_tables_specs
-from loadit.database_creation import create_tables, finalize_database, open_table, truncate_file
+from loadit.database_creation import create_tables, assembly_database, open_table
 from loadit.misc import humansize, get_hasher, hash_bytestr
 
 
@@ -252,14 +252,15 @@ class Database(object):
         batches = [['Initial batch', None, [os.path.basename(file) for file in files]]]
 
         try:
-            headers, load_cases_info = create_tables(self.path, files, tables_specs,
-                                                     table_generator=table_generator)
+            headers = dict()
+            create_tables(self.path, files, headers, tables_specs,
+                          table_generator=table_generator)
         except Exception as e: # Delete database if something unexpected happens
             shutil.rmtree(self.path)
             raise e
 
-        finalize_database(self.path, database_name, database_version, database_project,
-                          headers, load_cases_info, batches, self.max_memory)
+        assembly_database(self.path, database_name, database_version, database_project,
+                          headers, batches, self.max_memory)
         self.load()
         print('Database created succesfully!')
 
@@ -318,17 +319,16 @@ class Database(object):
             open_table(header, new_table=False)
 
         try:
-            _, load_cases_info = create_tables(self.path, files, self._get_tables_specs(), self.header.tables,
-                                               load_cases_info={name: dict() for name in self.tables},
-                                               table_generator=table_generator)
+            create_tables(self.path, files, self.header.tables, self._get_tables_specs(),
+                          table_generator=table_generator)
         except Exception as e: # Restore database if something unexpected happens
             self.load()
             self.restore(self.header.batches[-1][0])
             raise e
 
         self.header.batches.append([batch_name, None, [os.path.basename(file) for file in files]])
-        finalize_database(self.path, self.header.name, self.header.version, self.header.project,
-                          self.header.tables, load_cases_info, self.header.batches, self.max_memory, self.header.checksum_method)
+        assembly_database(self.path, self.header.name, self.header.version, self.header.project,
+                          self.header.tables, self.header.batches, self.max_memory, self.header.checksum_method)
         self.load()
         print('Database updated succesfully!')
 
@@ -357,10 +357,6 @@ class Database(object):
                 batch_index = max(batch_index, index)
                 header['batches'] = header['batches'][:index + 1]
                 position = header['batches'][index][1]
-
-                for LID in header['LIDs'][position:]:
-                    header['LOAD CASES INFO'].pop(LID, None)
-
                 header['LIDs'] = header['LIDs'][:position]
 
                 truncate_file(os.path.join(self.path, name, 'LID.bin'),
@@ -376,7 +372,7 @@ class Database(object):
                 del self.tables[name]
                 shutil.rmtree(os.path.join(self.path, name))
 
-        finalize_database(self.path, self.header.name, self.header.version, self.header.project,
+        assembly_database(self.path, self.header.name, self.header.version, self.header.project,
                           {name: self.header.tables[name] for name in self.tables},
                           {name: dict() for name in self.tables},
                           self.header.batches[:batch_index + 1], self.max_memory, self.header.checksum_method)
@@ -928,6 +924,13 @@ def is_abs(field):
         return field[4:-1], True
     else:
         return field, False
+
+
+def truncate_file(file, offset):
+
+    with open(file, 'rb+') as f:
+        f.seek(offset)
+        f.truncate()
 
 
 def parse_query_file(file):
