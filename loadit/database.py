@@ -374,7 +374,6 @@ class Database(object):
 
         assembly_database(self.path, self.header.name, self.header.version, self.header.project,
                           {name: self.header.tables[name] for name in self.tables},
-                          {name: dict() for name in self.tables},
                           self.header.batches[:batch_index + 1], self.max_memory, self.header.checksum_method)
         self.load()
         print(f"Database restored to '{batch_name}' state succesfully!")
