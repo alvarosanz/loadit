@@ -468,19 +468,20 @@ class DatabaseLock(object):
         else:
             lock.release()
 
-        yield
+        try:
+            yield
+        finally: # Release database
 
-        # Release database
-        with self.main_lock:
-            lock_index, queue, n_jobs = self.locked_databases[database]
+            with self.main_lock:
+                lock_index, queue, n_jobs = self.locked_databases[database]
 
-            if queue > 1:
-                self.locked_databases[database] = (lock_index, queue - 1, n_jobs - 1)
-            else:
-                del self.locked_databases[database]
+                if queue > 1:
+                    self.locked_databases[database] = (lock_index, queue - 1, n_jobs - 1)
+                else:
+                    del self.locked_databases[database]
 
-            if block:
-                lock.release()
+                if block:
+                    lock.release()
 
 
 class WorkerServer(DatabaseServer):
