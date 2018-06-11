@@ -88,7 +88,9 @@ def append_to_table(table, header):
 
     if header['IDs'] is None:
         header['IDs'] = IDs
-        header['iIDs'] = {ID: i for i, ID in enumerate(IDs)}
+
+    if 'iIDs' not in header:
+        header['iIDs'] = {ID: i for i, ID in enumerate(header['IDs'])}
 
     if np.array_equal(header['IDs'], IDs):
 
