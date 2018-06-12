@@ -262,7 +262,7 @@ class Database(object):
         assembly_database(self.path, database_name, database_version, database_project,
                           headers, batches, self.max_memory)
         self.load()
-        print('Database created succesfully!')
+        print('Database created successfully!')
 
     def _close(self):
         """
@@ -330,7 +330,7 @@ class Database(object):
         assembly_database(self.path, self.header.name, self.header.version, self.header.project,
                           self.header.tables, self.header.batches, self.max_memory, self.header.checksum_method)
         self.load()
-        print('Database updated succesfully!')
+        print('Database updated successfully!')
 
     def restore(self, batch_name):
         """
@@ -376,7 +376,7 @@ class Database(object):
                           {name: self.header.tables[name] for name in self.tables},
                           self.header.batches[:batch_index + 1], self.max_memory, self.header.checksum_method)
         self.load()
-        print(f"Database restored to '{batch_name}' state succesfully!")
+        print(f"Database restored to '{batch_name}' state successfully!")
 
     def query_from_file(self, file, double_precision=False, return_dataframe=True):
         """

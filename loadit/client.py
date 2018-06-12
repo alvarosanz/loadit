@@ -1,6 +1,8 @@
 import getpass
 import json
 import jwt
+import time
+import pyarrow as pa
 from loadit.database import DatabaseHeader, parse_query_file
 from loadit.connection import Connection, get_private_key
 from loadit.misc import get_hash
@@ -71,7 +73,11 @@ class BaseClient(object):
                 print(f"Assembling database ...")
                 data = connection.recv()
             elif kwargs['request_type'] == 'query':
-                data['batch'] = connection.recv_batch()
+                print('Done!')
+                print(data['msg'], end=' ')
+                reader = pa.RecordBatchStreamReader(pa.BufferReader(connection.recv().getbuffer()))
+                print('Done!')
+                data['batch'] = reader.read_next_batch()
 
         finally:
             connection.kill()
@@ -210,6 +216,8 @@ class DatabaseClient(BaseClient):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
+        start = time.time()
+        print('Processing query ...', end=' ')
         batch = self._request(request_type='query', table=table, fields=fields,
                               LIDs=LIDs, IDs=IDs, groups=groups,
                               geometry=geometry, weights=weights,
@@ -222,9 +230,11 @@ class DatabaseClient(BaseClient):
             return batch
 
         if output_file:
-            print(f"Writing '{output_file}' ...")
+            print(f"Writing '{output_file}' ...", end=' ')
             df.to_csv(output_file)
+            print('Done!')
 
+        print('{:.1f} seconds'.format(time.time() - start))
         return df
 
     def _request(self, **kwargs):
@@ -248,6 +258,7 @@ class Client(BaseClient):
         self._private_key = get_private_key()
         self._authentication = None
         self._request(request_type='authentication')
+        print('Login successful!')
 
     @property
     def session(self):

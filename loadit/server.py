@@ -12,6 +12,7 @@ import traceback
 import socketserver
 from contextlib import contextmanager
 import threading
+import pyarrow as pa
 from multiprocessing import Process, cpu_count, Event, Manager, Lock
 from loadit.database import Database, parse_query
 from loadit.sessions import Sessions
@@ -51,15 +52,15 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
 
         # CLIENT REQUESTS
         elif query['request_type'] == 'authentication':
-            connection.send(msg={'msg': 'Login succesfully!'})
+            connection.send(msg={'msg': 'Login successfully!'})
         elif query['request_type'] == 'shutdown':
 
             if query['node']:
                 self.server.shutdown_node(query['node'])
-                connection.send(msg={'msg': 'Node shutdown succesfully!'})
+                connection.send(msg={'msg': 'Node shutdown successfully!'})
             else:
                 threading.Thread(target=self.server.shutdown).start()
-                connection.send(msg={'msg': 'Cluster shutdown succesfully!'})
+                connection.send(msg={'msg': 'Cluster shutdown successfully!'})
 
         elif query['request_type'] == 'cluster_info':
             connection.send(msg={'msg': self.server.info(print_to_screen=False)})
@@ -68,10 +69,10 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
                                              is_admin=query['is_admin'],
                                              create_allowed=query['create_allowed'],
                                              databases=query['databases'])
-            connection.send(msg={'msg': "User '{}' added succesfully!".format(query['user'])})
+            connection.send(msg={'msg': "User '{}' added successfully!".format(query['user'])})
         elif query['request_type'] == 'remove_session':
             self.server.sessions.remove_session(query['user'])
-            connection.send(msg={'msg': "User '{}' removed succesfully!".format(query['user'])})
+            connection.send(msg={'msg': "User '{}' removed successfully!".format(query['user'])})
         elif query['request_type'] == 'list_sessions':
             connection.send(msg={'sessions': list(self.server.sessions.sessions.values())})
         elif query['request_type'] == 'sync_databases':
@@ -110,7 +111,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
             with self.server.database_lock.acquire(query['path']):
                 shutil.rmtree(os.path.join(self.server.root_path, query['path']))
 
-            connection.send(msg={'msg': "Database '{}' removed succesfully!".format(query['path'])})
+            connection.send(msg={'msg': "Database '{}' removed successfully!".format(query['path'])})
             del self.server.databases[query['path']]
         else:
 
@@ -131,7 +132,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                     db.create(query['files'], path, query['name'], query['version'],
                               database_project=query['project'],
                               table_generator=connection.recv_tables())
-                    msg = 'Database created succesfully!'
+                    msg = 'Database created successfully!'
                 else:
                     db = Database(path)
 
@@ -142,10 +143,10 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 elif query['request_type'] == 'append_to_database':
                     connection.send(msg=db._get_tables_specs())
                     db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
-                    msg = 'Database created succesfully!'
+                    msg = 'Database created successfully!'
                 elif query['request_type'] == 'restore_database':
                     db.restore(query['batch'])
-                    msg = f"Database restored to '{query['batch']}' state succesfully!"
+                    msg = f"Database restored to '{query['batch']}' state successfully!"
 
                 header = db.header.__dict__
                 db = None
@@ -153,12 +154,13 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 if self.server.current_session['database_modified']:
                     self.server.databases[query['path']] = get_database_hash(os.path.join(path, '##header.json'))
 
-            connection.send(msg={'msg': msg, 'header': header})
-
             try:
-                connection.send_batch(batch)
+                batch_message = get_batch_message(batch)
+                msg = f"Transferring query results ({humansize(len(batch_message))}) ..."
+                connection.send(msg={'msg': msg, 'header': header})
+                connection.send(batch_message)
             except NameError:
-                pass
+                connection.send(msg={'msg': msg, 'header': header})
 
 
 class DatabaseServer(socketserver.TCPServer):
@@ -297,7 +299,7 @@ class CentralServer(DatabaseServer):
                       n_workers=cpu_count() - 1, debug=self._debug)
         print(f"Address: {self.server_address}")
         self.serve_forever()
-        print('Cluster shutdown succesfully!')
+        print('Cluster shutdown successfully!')
 
     def shutdown(self):
 
@@ -660,7 +662,7 @@ def start_node(central_address, root_path, backup=False, debug=False):
     for worker in workers:
         worker.join()
 
-    print('Node shutdown succesfully!')
+    print('Node shutdown successfully!')
 
 
 def get_local_databases(root_path):
@@ -702,3 +704,11 @@ def send(address, msg, master_key=None, private_key=None, recv=False):
 
 def request(address, msg, master_key=None, private_key=None):
     return send(address, msg, master_key, private_key, recv=True)
+
+
+def get_batch_message(batch):
+    sink = pa.BufferOutputStream()
+    writer = pa.RecordBatchStreamWriter(sink, batch.schema)
+    writer.write_batch(batch)
+    writer.close()
+    return sink.get_result()

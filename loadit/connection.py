@@ -7,7 +7,6 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.fernet import Fernet
 import socket
 import json
-import pyarrow as pa
 import numpy as np
 from io import BytesIO
 from loadit.misc import humansize
@@ -87,17 +86,6 @@ class Connection(object):
             return json.loads(buffer.read().decode())
         elif data_type == '#':
             raise ConnectionError(buffer.read().decode())
-
-    def send_batch(self, batch):
-        sink = pa.BufferOutputStream()
-        writer = pa.RecordBatchStreamWriter(sink, batch.schema)
-        writer.write_batch(batch)
-        writer.close()
-        self.send(sink.get_result())
-
-    def recv_batch(self):
-        reader = pa.RecordBatchStreamReader(pa.BufferReader(self.recv().getbuffer()))
-        return reader.read_next_batch()
 
     def send_tables(self, files, tables_specs):
         ignored_tables = set()
