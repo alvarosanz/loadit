@@ -203,7 +203,7 @@ def create_table_header(header, batch_name, checksum_method):
     }
 
     with open(os.path.join(header['path'], '#header.json'), 'w') as f:
-        json.dump(table_header, f, indent=4)
+        json.dump(table_header, f)
 
 
 def create_database_header(database_path, database_name, database_version,
@@ -233,7 +233,7 @@ def create_database_header(database_path, database_name, database_version,
     database_header_file = os.path.join(database_path, '##header.json')
 
     with open(database_header_file, 'w') as f:
-        json.dump(database_header, f, indent=4)
+        json.dump(database_header, f)
 
     with open(database_header_file, 'rb') as f_in, open(os.path.splitext(database_header_file)[0] + '.' + checksum_method, 'wb') as f_out:
         f_out.write(hash_bytestr(f_in, get_hasher(checksum_method), ashexstr=False))
