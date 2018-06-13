@@ -50,8 +50,8 @@ def create_tables(database_path, files, headers, tables_specs=None,
             close_table(header)
 
     for header in headers.values():
-        np.array(header['LIDs']).tofile(os.path.join(header['path'], header['columns'][0][0] + '.bin'))
-        np.array(header['IDs']).tofile(os.path.join(header['path'], header['columns'][1][0] + '.bin'))
+        np.array(header['LIDs'], dtype=header['columns'][0][1]).tofile(os.path.join(header['path'], header['columns'][0][0] + '.bin'))
+        header['IDs'].tofile(os.path.join(header['path'], header['columns'][1][0] + '.bin'))
 
 
 def open_table(header, new_table=False):

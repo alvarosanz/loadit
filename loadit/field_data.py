@@ -38,11 +38,11 @@ class FieldData(object):
 
     @property
     def LIDs(self):
-        return np.array(self._LIDs)
+        return np.array(self._LIDs, dtype=self._LIDs.dtype)
 
     @property
     def IDs(self):
-        return np.array(self._IDs)
+        return np.array(self._IDs, dtype=self._IDs.dtype)
 
     def close(self):
         """

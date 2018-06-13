@@ -316,6 +316,7 @@ class Database(object):
 
         for header in self.header.tables.values():
             header['path'] = os.path.join(self.path, header['name'])
+            header['IDs'] = np.array(header['IDs'], dtype=header['columns'][1][1])
             open_table(header, new_table=False)
 
         try:
@@ -431,11 +432,11 @@ class Database(object):
         if groups:
             IDs = sorted({ID for IDs in groups.values() for ID in IDs})
             iIDs = {ID: i for i, ID in enumerate(IDs)}
-            indexes_by_group = {group: np.array([iIDs[ID] for ID in group_IDs]) for
+            indexes_by_group = {group: np.array([iIDs[ID] for ID in group_IDs], dtype=np.int64) for
                                 group, group_IDs in groups.items()}
 
             if weights:
-                weights_by_group = {group: np.array([weights[ID] for ID in group_IDs]) for
+                weights_by_group = {group: np.array([weights[ID] for ID in group_IDs], dtype=np.int64) for
                                     group, group_IDs in groups.items()}
 
         # Requested LIDs & IDs
@@ -462,7 +463,7 @@ class Database(object):
 
         # Group data pre-processing
         if geometry:
-            geometry = {parameter: np.array([geometry[parameter][ID] for ID in IDs_queried]) for
+            geometry = {parameter: np.array([geometry[parameter][ID] for ID in IDs_queried], dtype=float_dtype) for
                         parameter in geometry}
 
         # Memory pre-allocation
@@ -493,9 +494,9 @@ class Database(object):
                     LIDs2read_batch = LIDs2read
 
             if batch_slice:
-                LIDs_queried_batch = np.array(LIDs_queried[batch_slice])
+                LIDs_queried_batch = np.array(LIDs_queried[batch_slice], dtype=np.int64)
             else:
-                LIDs_queried_batch = np.array(LIDs_queried)
+                LIDs_queried_batch = np.array(LIDs_queried, dtype=np.int64)
 
             # Process fields
             fields_processed = set()
@@ -615,13 +616,13 @@ class Database(object):
             if mem_handler.level == 0:
                 index0 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
                 index1 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
-                set_index(np.array(LIDs_queried), np.array(IDs_queried), index0, index1)
+                set_index(np.array(LIDs_queried, dtype=np.int64), np.array(IDs_queried, dtype=np.int64), index0, index1)
                 arrays = [pa.array(index0.ravel()), pa.array(index1.ravel())]
                 arrays += [pa.array(data[:, i]) for i in range(len(fields))]
             elif mem_handler.level == 1:
                 index0 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
                 index1 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
-                set_index(np.array(LIDs_queried), np.arange(len(groups), dtype=np.int64), index0, index1)
+                set_index(np.array(LIDs_queried, dtype=np.int64), np.arange(len(groups), dtype=np.int64), index0, index1)
                 arrays = [pa.array(index0.ravel()),
                           pa.DictionaryArray.from_arrays(pa.array(index1.ravel()), pa.array(list(groups)))]
                 arrays += [pa.array(data[:, i]) for i in range(len(fields))]
