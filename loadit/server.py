@@ -129,9 +129,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
                     connection.send(msg=get_tables_specs())
                     db = Database()
-                    db.create(query['files'], path, query['name'], query['version'],
-                              database_project=query['project'],
-                              table_generator=connection.recv_tables())
+                    db.create(query['files'], path, table_generator=connection.recv_tables())
                     msg = 'Database created successfully!'
                 else:
                     db = Database(path)

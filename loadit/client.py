@@ -117,27 +117,6 @@ class DatabaseClient(BaseClient):
         else:
             self._request(request_type='header')
 
-    def info(self, print_to_screen=True, detailed=False):
-        """
-        Display database info.
-
-        Parameters
-        ----------
-        print_to_screen : bool, optional
-            Whether to print to screen or return an string instead.
-        detailed : bool, optional
-            Whether to show detailed info or not.
-
-        Returns
-        -------
-        str, optional
-            Database info.
-        """
-        print(f"Address: {self.server_address[0]} ({self.server_address[1]})")
-
-        if self._headers:
-            super().info(print_to_screen, detailed)
-
     def check(self):
         """
         Check database integrity.
@@ -271,14 +250,12 @@ class Client(BaseClient):
         self.database = DatabaseClient(self.server_address, database,
                                        self._private_key, self._authentication)
 
-    def create_database(self, files, database, database_name, database_version,
-                        database_project=None):
+    def create_database(self, files, database):
 
         if isinstance(files, str):
             files = [files]
 
-        data = self._request(request_type='create_database', files=files, path=database,
-                             name=database_name, version=database_version, project=database_project)
+        data = self._request(request_type='create_database', files=files, path=database)
         print(data['msg'])
         self.database = DatabaseClient(self.server_address, database,
                                        self._private_key, self._authentication, data['header'])

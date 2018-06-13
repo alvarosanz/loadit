@@ -128,15 +128,13 @@ def close_table(header):
         pass
 
 
-def assembly_database(database_path, database_name, database_version, database_project,
-                      headers, batches, max_chunk_size, checksum_method='sha256'):
+def assembly_database(database_path, headers, batches, max_chunk_size, checksum_method='sha256'):
 
     for name, header in headers.items():
         create_transpose(header, max_chunk_size)
         create_table_header(header, batches[-1][0], checksum_method)
 
-    create_database_header(database_path, database_name, database_version,
-                           database_project, headers, batches, checksum_method)
+    create_database_header(database_path, headers, batches, checksum_method)
 
 
 def create_transpose(header, max_chunk_size):
@@ -206,11 +204,7 @@ def create_table_header(header, batch_name, checksum_method):
         json.dump(table_header, f)
 
 
-def create_database_header(database_path, database_name, database_version,
-                           database_project, headers, batches, checksum_method):
-
-    if database_project is None:
-        database_project = ''
+def create_database_header(database_path, headers, batches, checksum_method):
 
     if batches[-1][1] is None:
         batches[-1][1] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -222,13 +216,14 @@ def create_database_header(database_path, database_name, database_version,
         with open(os.path.join(database_path, table, '#header.json'), 'rb') as f:
             checksums[table] = hash_bytestr(f, get_hasher(checksum_method))
 
-    database_header = {'project': database_project,
-                       'name': database_name,
-                       'version': database_version,
-                       'date': str(datetime.date.today()),
-                       'checksum_method': checksum_method,
-                       'checksums': checksums,
-                       'batches': batches}
+    from loadit.__init__ import __version__
+
+    database_header = {
+        'version': __version__,
+        'checksum_method': checksum_method,
+        'checksums': checksums,
+        'batches': batches
+    }
 
     database_header_file = os.path.join(database_path, '##header.json')
 

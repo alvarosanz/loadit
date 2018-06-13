@@ -80,10 +80,6 @@ class DatabaseHeader(object):
         info = list()
 
         # General database info
-        if self.project:
-            info.append(f'Project: {self.project}')
-
-        info.append(f'Name: {self.name}')
         info.append(f'Version: {self.version}')
         info.append(f'Size: {humansize(self.nbytes)}'.format())
         info.append('')
@@ -221,8 +217,7 @@ class Database(object):
         else:
             return info
 
-    def create(self, files, database_path, database_name, database_version,
-               database_project=None, tables_specs=None, overwrite=False,
+    def create(self, files, database_path, tables_specs=None, overwrite=False,
                table_generator=None):
         """
         Create a new database from .pch files.
@@ -233,12 +228,6 @@ class Database(object):
             List of .pch files.
         database_path : str
             Database path.
-        database_name : str
-            Database name.
-        database_version : str
-            Database version.
-        database_project : str, optional
-            Database project.
         tables_specs : dict, optional
             Tables specifications. If not provided or None, default ones are used.
         overwrite : bool, optional
@@ -259,8 +248,7 @@ class Database(object):
             shutil.rmtree(self.path)
             raise e
 
-        assembly_database(self.path, database_name, database_version, database_project,
-                          headers, batches, self.max_memory)
+        assembly_database(self.path, headers, batches, self.max_memory)
         self.load()
         print('Database created successfully!')
 
@@ -328,8 +316,8 @@ class Database(object):
             raise e
 
         self.header.batches.append([batch_name, None, [os.path.basename(file) for file in files]])
-        assembly_database(self.path, self.header.name, self.header.version, self.header.project,
-                          self.header.tables, self.header.batches, self.max_memory, self.header.checksum_method)
+        assembly_database(self.path, self.header.tables, self.header.batches,
+                          self.max_memory, self.header.checksum_method)
         self.load()
         print('Database updated successfully!')
 
@@ -373,8 +361,7 @@ class Database(object):
                 del self.tables[name]
                 shutil.rmtree(os.path.join(self.path, name))
 
-        assembly_database(self.path, self.header.name, self.header.version, self.header.project,
-                          {name: self.header.tables[name] for name in self.tables},
+        assembly_database(self.path, {name: self.header.tables[name] for name in self.tables},
                           self.header.batches[:batch_index + 1], self.max_memory, self.header.checksum_method)
         self.load()
         print(f"Database restored to '{batch_name}' state successfully!")
