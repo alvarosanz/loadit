@@ -565,25 +565,21 @@ class Database(object):
                     fields_processed.add(field)
 
         mem_handler.update()
+        LIDs_queried = np.array(LIDs_queried, dtype=np.int64)
+        IDs_queried = np.array(IDs_queried, dtype=np.int64)
 
         # DataFrame creation
         if mem_handler.level == 0:
             index_names = [self.header.tables[table]['columns'][0][0],
                            self.header.tables[table]['columns'][1][0]]
-            data = mem_handler.data0.reshape((len(fields), len(LIDs_queried) * len(IDs_queried))).T
             columns = mem_handler.fields[0]
+            data = mem_handler.data0.reshape((len(fields), len(LIDs_queried) * len(IDs_queried))).T
         elif mem_handler.level == 1:
             index_names = [self.header.tables[table]['columns'][0][0], 'Group']
-            data = mem_handler.data1.reshape((len(fields), len(LIDs_queried) * len(groups))).T
             columns = mem_handler.fields[1]
+            data = mem_handler.data1.reshape((len(fields), len(LIDs_queried) * len(groups))).T
         else:
-
-            if groups:
-                index_names = ['Group']
-            else:
-                index_names = [self.header.tables[table]['columns'][1][0]]
-                groups = IDs_queried
-
+            index_names = ['Group'] if groups else [self.header.tables[table]['columns'][1][0]]
             columns = [field + suffix for field in mem_handler.fields[2] for suffix in ('', ': LID')]
             data = {field: mem_handler.get(field).ravel() for field in columns}
 
@@ -595,7 +591,11 @@ class Database(object):
             elif mem_handler.level == 1:
                 index = pd.MultiIndex.from_product([LIDs_queried, list(groups)], names=index_names)
             else:
-                index = pd.Index(list(groups), name=index_names[0])
+
+                if groups:
+                    index = pd.Index(list(groups), name=index_names[0])
+                else:
+                    index = pd.Index(IDs_queried, name=index_names[0])
 
             return pd.DataFrame(data, columns=columns, index=index, copy=False)
         else:
@@ -603,19 +603,24 @@ class Database(object):
             if mem_handler.level == 0:
                 index0 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
                 index1 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
-                set_index(np.array(LIDs_queried, dtype=np.int64), np.array(IDs_queried, dtype=np.int64), index0, index1)
+                set_index(LIDs_queried, IDs_queried, index0, index1)
                 arrays = [pa.array(index0.ravel()), pa.array(index1.ravel())]
                 arrays += [pa.array(data[:, i]) for i in range(len(fields))]
             elif mem_handler.level == 1:
                 index0 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
                 index1 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
-                set_index(np.array(LIDs_queried, dtype=np.int64), np.arange(len(groups), dtype=np.int64), index0, index1)
+                set_index(LIDs_queried, np.arange(len(groups), dtype=np.int64), index0, index1)
                 arrays = [pa.array(index0.ravel()),
                           pa.DictionaryArray.from_arrays(pa.array(index1.ravel()), pa.array(list(groups)))]
                 arrays += [pa.array(data[:, i]) for i in range(len(fields))]
             else:
-                index = np.arange(len(groups), dtype=np.int64)
-                arrays = [pa.DictionaryArray.from_arrays(pa.array(index.ravel()), pa.array(list(groups)))]
+
+                if groups:
+                    index = np.arange(len(groups), dtype=np.int64)
+                    arrays = [pa.DictionaryArray.from_arrays(pa.array(index), pa.array(list(groups)))]
+                else:
+                    arrays = [pa.array(IDs_queried)]
+
                 arrays += [pa.array(data[field]) for field in data]
 
             return pa.RecordBatch.from_arrays(arrays, index_names + columns,
