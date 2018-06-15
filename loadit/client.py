@@ -119,8 +119,15 @@ class DatabaseClient(BaseClient):
 
         if header:
             self.header = DatabaseHeader(header=header)
+            self._set_assertions()
         else:
             self._request(request_type='header')
+
+    def _set_assertions(self):
+        self._assertions = {name: {'fields': {field for field, _ in table['columns'][2:]},
+                                   'LIDs': set(table['LIDs']),
+                                   'IDs': set(table['IDs'])} for name, table in
+                            self.header.tables.items()}
 
     def check(self):
         """
@@ -203,6 +210,7 @@ class DatabaseClient(BaseClient):
             Data queried.
         """
         start = time.time()
+        self._check_query(table, fields, LIDs, IDs, groups, geometry, weights)
         print('Processing query ...', end=' ')
         batch = self._request(request_type='query', table=table, fields=fields,
                               LIDs=LIDs, IDs=IDs, groups=groups,
@@ -223,6 +231,79 @@ class DatabaseClient(BaseClient):
         print('{:.1f} seconds'.format(time.time() - start))
         return df
 
+    def _check_query(self, table, fields, LIDs, IDs, groups, geometry, weights):
+
+        # table checking
+        if table not in self._assertions:
+            raise ValueError(f'Invalid table: {table}')
+
+        # fields checking
+        if fields:
+            pass
+
+        # LIDs checking
+        if isinstance(LIDs, dict):
+            new_LIDs = set()
+            LIDs2read = set()
+
+            for new_LID, seq in LIDs.items():
+
+                if seq:
+
+                    if new_LID in self._assertions[table]['LIDs']:
+                        raise ValueError(f'Combined LID already exists: {new_LID}')
+
+                    new_LIDs.add(new_LID)
+
+                    for coeff in seq[::2]:
+
+                        if not type(coeff) is float:
+                            raise TypeError(f'Coefficient must be a float: {LIDs[new_LID]}')
+
+                    for LID in seq[1::2]:
+
+                        if LID not in self._assertions[table]['LIDs'] and LID not in new_LIDs:
+                            raise ValueError(f'Missing LID: {LID}')
+
+                elif new_LID not in self._assertions[table]['LIDs']:
+                    raise ValueError(f'Missing LID: {new_LID}')
+
+        else:
+            LIDs2read = LIDs
+
+        if LIDs2read:
+            missing_LIDs = {str(LID) for LID in LIDs2read if LID not in self._assertions[table]['LIDs']}
+
+            if missing_LIDs:
+                raise ValueError('Missing {}s: {}'.format(self.header.tables[table]['columns'][0][0],
+                                                          ', '.join(missing_LIDs)))
+
+        # IDs and groups checking
+        if groups:
+            empty_groups = {group for group in groups if not groups[group]}
+
+            if empty_groups:
+                raise ValueError('Empty groups: {}'.format(', '.join(empty_groups)))
+
+            IDs2read = sorted({ID for IDs in groups.values() for ID in IDs})
+        else:
+            IDs2read = IDs
+
+        if IDs2read:
+            missing_IDs = {str(ID) for ID in IDs2read if ID not in self._assertions[table]['IDs']}
+
+            if missing_IDs:
+                raise ValueError('Missing {}s: {}'.format(self.header.tables[table]['columns'][1][0],
+                                                          ', '.join(missing_IDs)))
+
+        # geometry checking
+        if geometry:
+            pass
+
+        # groups checking
+        if groups:
+            pass
+
     def _request(self, **kwargs):
         """
         Request something to the server.
@@ -232,6 +313,7 @@ class DatabaseClient(BaseClient):
 
         if data['header']:
             self.header = DatabaseHeader(header=data['header'])
+            self._set_assertions()
 
         return data
 
