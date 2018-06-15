@@ -388,8 +388,8 @@ class Database(object):
                           return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, weights=None, double_precision=False, return_dataframe=True,
-              **kwargs):
+              geometry=None, weights=None, output_file=None,
+              double_precision=False, return_dataframe=True, **kwargs):
         """
         Perform a query.
 
@@ -597,7 +597,12 @@ class Database(object):
                 else:
                     index = pd.Index(IDs_queried, name=index_names[0])
 
-            return pd.DataFrame(data, columns=columns, index=index, copy=False)
+            df = pd.DataFrame(data, columns=columns, index=index, copy=False)
+
+            if output_file:
+                df.to_csv(output_file)
+
+            return df
         else:
 
             if mem_handler.level == 0:

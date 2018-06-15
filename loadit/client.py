@@ -174,8 +174,10 @@ class DatabaseClient(BaseClient):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
-        return self.query(**parse_query_file(file), double_precision=double_precision,
-                          return_dataframe=return_dataframe)
+        query = parse_query_file(file)
+        output_file = query.pop('output_file')
+        return self.query(**query, output_file=output_file,
+                          double_precision=double_precision, return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
               geometry=None, weights=None, output_file=None,
