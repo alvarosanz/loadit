@@ -431,8 +431,8 @@ class Database(object):
                                     group, group_IDs in groups.items()}
 
         # Requested LIDs & IDs
-        LIDs_queried = self.tables[table]._LIDs if LIDs is None else list(LIDs)
-        IDs_queried = self.tables[table]._IDs if IDs is None else IDs
+        LIDs_queried = self.tables[table]._LIDs if not LIDs else list(LIDs)
+        IDs_queried = self.tables[table]._IDs if not IDs else IDs
 
         # Process LID combination data
         LID_combinations = None
