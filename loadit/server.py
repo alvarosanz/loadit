@@ -145,11 +145,15 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                     db.restore(query['batch'])
                     msg = f"Database restored to '{query['batch']}' state successfully!"
 
-                header = db.header.__dict__
-                db = None
-
                 if self.server.current_session['database_modified']:
                     self.server.databases[query['path']] = get_database_hash(os.path.join(path, '##header.json'))
+
+                if query['request_type'] in ('header', 'create_database', 'append_to_database', 'restore_database'):
+                    header = db.header.__dict__
+                else:
+                    header = None
+
+                db = None
 
             try:
                 batch_message = get_batch_message(batch)

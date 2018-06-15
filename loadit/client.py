@@ -33,7 +33,7 @@ class BaseClient(object):
 
         connection.recv()
 
-    def _request(self, **kwargs):
+    def _request(self, is_redirected=False, **kwargs):
         """
         Request something to the server.
         """
@@ -44,7 +44,12 @@ class BaseClient(object):
             self.authenticate(connection)
 
             # Sending request
-            connection.send(msg=kwargs)
+
+            if is_redirected:
+                connection.send(msg={key: kwargs[key] for key in ('request_type', 'path')})
+            else:
+                connection.send(msg=kwargs)
+
             data = connection.recv()
 
             # Redirecting request (if necessary)
@@ -223,8 +228,11 @@ class DatabaseClient(BaseClient):
         Request something to the server.
         """
         kwargs['path'] = self.path
-        data = super()._request(**kwargs)
-        self.header = DatabaseHeader(header=data['header'])
+        data = super()._request(is_redirected=True, **kwargs)
+
+        if data['header']:
+            self.header = DatabaseHeader(header=data['header'])
+
         return data
 
 
@@ -257,7 +265,7 @@ class Client(BaseClient):
         if isinstance(files, str):
             files = [files]
 
-        data = self._request(request_type='create_database', files=files, path=database)
+        data = self._request(is_redirected=True, request_type='create_database', files=files, path=database)
         print(data['msg'])
         self.database = DatabaseClient(self.server_address, database,
                                        self._private_key, self._authentication, data['header'])
