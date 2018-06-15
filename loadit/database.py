@@ -119,6 +119,45 @@ class DatabaseHeader(object):
             return info
 
 
+def create_database(files, database_path, tables_specs=None, overwrite=False,
+                    table_generator=None, max_memory=1e9):
+    """
+    Create a new database from .pch files.
+
+    Parameters
+    ----------
+    files : list of str
+        List of .pch files.
+    database_path : str
+        Database path.
+    tables_specs : dict, optional
+        Tables specifications. If not provided or None, default ones are used.
+    overwrite : bool, optional
+        Whether to rewrite or not an already existing database.
+    table_generator : generator, optional
+        A generator which yields tables.
+    max_memory : int, optional
+        Memory limit (in bytes).
+    """
+    Path(database_path).mkdir(parents=True, exist_ok=overwrite)
+    print('Creating database ...')
+    database_path = database_path
+    batches = [['Initial batch', None, [os.path.basename(file) for file in files]]]
+
+    try:
+        headers = dict()
+        create_tables(database_path, files, headers, tables_specs,
+                      table_generator=table_generator)
+    except Exception as e: # Delete database if something unexpected happens
+        shutil.rmtree(database_path)
+        raise e
+
+    assembly_database(database_path, headers, batches, max_memory)
+    print('Database created successfully!')
+    database = Database(database_path, max_memory)
+    database.load()
+    return database
+
 class Database(object):
     """
     Handles a local database.
@@ -216,41 +255,6 @@ class Database(object):
             print(info)
         else:
             return info
-
-    def create(self, files, database_path, tables_specs=None, overwrite=False,
-               table_generator=None):
-        """
-        Create a new database from .pch files.
-
-        Parameters
-        ----------
-        files : list of str
-            List of .pch files.
-        database_path : str
-            Database path.
-        tables_specs : dict, optional
-            Tables specifications. If not provided or None, default ones are used.
-        overwrite : bool, optional
-            Whether to rewrite or not an already existing database.
-        table_generator : generator, optional
-            A generator which yields tables.
-        """
-        Path(database_path).mkdir(parents=True, exist_ok=overwrite)
-        print('Creating database ...')
-        self.path = database_path
-        batches = [['Initial batch', None, [os.path.basename(file) for file in files]]]
-
-        try:
-            headers = dict()
-            create_tables(self.path, files, headers, tables_specs,
-                          table_generator=table_generator)
-        except Exception as e: # Delete database if something unexpected happens
-            shutil.rmtree(self.path)
-            raise e
-
-        assembly_database(self.path, headers, batches, self.max_memory)
-        self.load()
-        print('Database created successfully!')
 
     def _close(self):
         """

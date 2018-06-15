@@ -14,7 +14,7 @@ from contextlib import contextmanager
 import threading
 import pyarrow as pa
 from multiprocessing import Process, cpu_count, Event, Manager, Lock
-from loadit.database import Database, parse_query
+from loadit.database import Database, create_database, parse_query
 from loadit.sessions import Sessions
 from loadit.tables_specs import get_tables_specs
 from loadit.connection import Connection, get_master_key, get_private_key, get_ip, find_free_port
@@ -128,8 +128,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                         raise FileExistsError(f"Database already exists at '{query['path']}'!")
 
                     connection.send(msg=get_tables_specs())
-                    db = Database()
-                    db.create(query['files'], path, table_generator=connection.recv_tables())
+                    db = create_database(query['files'], path, table_generator=connection.recv_tables())
                     msg = 'Database created successfully!'
                 else:
                     db = Database(path)
