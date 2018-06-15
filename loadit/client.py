@@ -26,9 +26,11 @@ class BaseClient(object):
         if self._authentication:
             connection.send_secret(json.dumps({'authentication': self._authentication.decode()}).encode())
         else:
+            from loadit.__init__ import __version__
             connection.send_secret(json.dumps({'user': input('user: '),
                                                'password': getpass.getpass('password: '),
-                                               'request': 'authentication'}).encode())
+                                               'request': 'authentication',
+                                               'version': __version__}).encode())
             self._authentication = connection.recv_secret()
 
         connection.recv()

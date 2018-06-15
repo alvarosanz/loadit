@@ -227,6 +227,12 @@ class DatabaseServer(socketserver.TCPServer):
                 error_msg = 'Wrong username or password!'
                 self.current_session = self.sessions.get_session(data['user'], data['password'])
 
+                from loadit.__init__ import __version__
+
+                if data['version'].split('.')[-1] != __version__.split('.')[-1]:
+                    error_msg = f"Not supported version! Update to version: '{__version__}'"
+                    raise PermissionError()
+
                 if data['request'] == 'master_key':
 
                     if not self.current_session['is_admin']:

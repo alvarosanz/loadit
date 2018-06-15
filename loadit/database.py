@@ -37,6 +37,12 @@ class DatabaseHeader(object):
             with open(os.path.join(path, '##header.json')) as f:
                 self.__dict__ = json.load(f)
 
+            # Check database version
+            from loadit.__init__ import __version__
+
+            if self.version.split('.')[-2] != __version__.split('.')[-2]:
+                raise ValueError(f"Not supported version!")
+
             # Load database header checksum
             with open(os.path.join(path, f'##header.{self.checksum_method}'), 'rb') as f:
                 self.checksum = binascii.hexlify(f.read()).decode()
