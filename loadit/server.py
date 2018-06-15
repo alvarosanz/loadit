@@ -210,6 +210,7 @@ class DatabaseServer(socketserver.TCPServer):
         self.databases = get_local_databases(self.root_path)
 
     def verify_request(self, request, client_address):
+        error_msg = 'Access denied!'
 
         try:
             connection = Connection(connection_socket=request, private_key=self.private_key)
@@ -223,11 +224,13 @@ class DatabaseServer(socketserver.TCPServer):
                 self.current_session = {'is_admin': True}
 
             elif 'password' in data:
+                error_msg = 'Wrong username or password!'
                 self.current_session = self.sessions.get_session(data['user'], data['password'])
 
                 if data['request'] == 'master_key':
 
                     if not self.current_session['is_admin']:
+                        error_msg = 'Not enough privileges!'
                         raise PermissionError()
 
                     connection.send_secret(self.master_key)
@@ -244,7 +247,7 @@ class DatabaseServer(socketserver.TCPServer):
             return True
 
         except Exception:
-            connection.send(exception='Access denied!')
+            connection.send(exception=error_msg)
             return False
 
     def check_session(self, query):
