@@ -12,11 +12,8 @@ Create a new database::
 
     files = ['/Users/Alvaro/FEM_results/file01.pch', '/Users/Alvaro/FEM_results/file02.pch']
     database_path = '/Users/Alvaro/databases/FooDatabase'
-    database_name = 'Foo database'
-    database_version = '0.0.1'
 
-    database = loadit.Database()
-    database.create(files, database_path, database_name, database_version)
+    database = loadit.create_database(files, database_path)
 
 Load an existing database::
 
@@ -101,10 +98,8 @@ Create a new database::
 
     files = ['/Users/Alvaro/FEM_results/file01.pch', '/Users/Alvaro/FEM_results/file02.pch']
     database_path = 'FooDatabase'
-    database_name = 'Foo database'
-    database_version = '0.0.1'
 
-    client.create_database(files, database_path, database_name, database_version)
+    client.create_database(files, database_path)
 
 Remove a database::
 
