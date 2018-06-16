@@ -502,13 +502,13 @@ class Database(object):
                                     len(LIDs2read) + len(LIDs_combined_used) if LID_combinations else None)
 
         # Process batches
-        for i, batch_slice in enumerate(mem_handler.batches):
+        for batch_index, batch_slice in enumerate(mem_handler.batches):
             # Process batch information
             read_fields = True
 
             if LID_combinations:
 
-                if i == 0:
+                if batch_index == 0:
                     LIDs2read_batch = LIDs2read
                 else:
                     read_fields = False
@@ -518,6 +518,7 @@ class Database(object):
                 else:
                     LID_combinations_batch = LID_combinations
             else:
+                LID_combinations_batch = None
 
                 if batch_slice:
                     LIDs2read_batch = LIDs_queried[batch_slice]
@@ -538,56 +539,13 @@ class Database(object):
 
                     if level == 0: # Load fields into memory
                         basic_field, is_absolute = is_abs(field)
-
-                        if basic_field in self.tables[table]: # Basic field
-
-                            if basic_field not in mem_handler:
-                                mem_handler.add(basic_field)
-
-                            if read_fields:
-                                self.tables[table][basic_field].read(mem_handler.get(basic_field, i, True), LIDs2read_batch, IDs)
-
-                            if LID_combinations:
-                                combine_load_cases(mem_handler.get(basic_field, i, True),
-                                                   LID_combinations_batch, mem_handler.get(basic_field, i))
-
-                            fields_processed.add(basic_field)
-                        else: # Derived field
-
-                            if basic_field in query_functions[table]:
-                                func, func_args = query_functions[table][basic_field]
-                                args = list()
-
-                                for arg in func_args:
-
-                                    if arg in self.tables[table]:
-
-                                        if arg not in mem_handler:
-                                            mem_handler.add(arg)
-
-                                        if arg not in fields_processed:
-
-                                            if read_fields:
-                                                self.tables[table][arg].read(mem_handler.get(arg, i, True), LIDs2read_batch, IDs)
-
-                                            if LID_combinations:
-                                                combine_load_cases(mem_handler.get(arg, i, True),
-                                                                   LID_combinations_batch, mem_handler.get(arg, i))
-
-                                            fields_processed.add(arg)
-
-                                        args.append(mem_handler.get(arg, i))
-                                    else:
-                                        args.append(geometry[arg])
-
-                                func(*args, mem_handler.get(field, i))
-                            else:
-                                raise ValueError(f"Unsupported output: '{basic_field}'")
-
+                        process_field(field, basic_field, self.tables[table], query_functions[table], geometry,
+                                      mem_handler, fields_processed, read_fields,
+                                      batch_index, LIDs2read_batch, IDs ,LID_combinations_batch)
                     else: # Field aggregation
                         aggregation, is_absolute = is_abs(field.split('-')[-1])
-                        array = mem_handler.get('-'.join(field.split('-')[:-1]), i)
-                        array_agg = mem_handler.get(field, i)
+                        array = mem_handler.get('-'.join(field.split('-')[:-1]), batch_index)
+                        array_agg = mem_handler.get(field, batch_index)
                         basic_field = field
 
                         if level == 1: # 1st level
@@ -600,11 +558,11 @@ class Database(object):
                         elif level == 2: # 2nd level
                             aggregate(array, array_agg, aggregation, level,
                                       LIDs_queried_batch, mem_handler.get(field + ': LID'),
-                                      use_previous_agg= i > 0)
+                                      use_previous_agg= batch_index > 0)
 
                     # Absolute value
                     if is_absolute:
-                        np.abs(mem_handler.get(basic_field, i), out=mem_handler.get(field, i))
+                        np.abs(mem_handler.get(basic_field, batch_index), out=mem_handler.get(field, batch_index))
 
                     fields_processed.add(field)
 
@@ -674,6 +632,63 @@ class Database(object):
 
             return pa.RecordBatch.from_arrays(arrays, index_names + columns,
                                               metadata={b'index_columns': json.dumps(index_names).encode()})
+
+
+def process_field(field, basic_field, table, query_functions, geometry,
+                  mem_handler, fields_processed, read_fields,
+                  batch_index, LIDs2read_batch, IDs ,LID_combinations_batch):
+
+    if basic_field not in fields_processed:
+
+        if basic_field not in mem_handler:
+            mem_handler.add(basic_field)
+
+        if basic_field in table: # Basic field
+
+            if read_fields:
+                table[basic_field].read(mem_handler.get(basic_field, batch_index, True), LIDs2read_batch, IDs)
+
+            if LID_combinations_batch:
+                combine_load_cases(mem_handler.get(basic_field, batch_index, True),
+                                   LID_combinations_batch, mem_handler.get(basic_field, batch_index))
+
+        elif basic_field in query_functions: # Derived field
+            func, func_args = query_functions[basic_field]
+            args = list()
+
+            for arg in func_args:
+
+                if geometry and arg in geometry:
+                    args.append(geometry[arg])
+                else:
+
+                    if arg not in mem_handler:
+                        mem_handler.add(arg)
+
+                    if arg not in fields_processed:
+
+                        if arg in table: # Basic field
+
+                            if read_fields:
+                                table[arg].read(mem_handler.get(arg, batch_index, True), LIDs2read_batch, IDs)
+
+                            if LID_combinations_batch:
+                                combine_load_cases(mem_handler.get(arg, batch_index, True),
+                                                   LID_combinations_batch, mem_handler.get(arg, batch_index))
+                        else: # Derived field
+                            process_field(arg, arg, table, query_functions, geometry,
+                                          mem_handler, fields_processed, read_fields,
+                                          batch_index, LIDs2read_batch, IDs ,LID_combinations_batch)
+
+                        fields_processed.add(arg)
+
+                    args.append(mem_handler.get(arg, batch_index))
+
+            func(*args, mem_handler.get(field, batch_index))
+        else:
+            raise ValueError(f"Unsupported output: '{basic_field}'")
+
+        fields_processed.add(basic_field)
 
 
 class MemoryHandler(object):
@@ -877,6 +892,7 @@ def check_aggregation_options(fields, groups):
                 raise ValueError(f"Unsupported aggregation method: '{aggregation}'")
 
     return aggregations_level
+
 
 def combine_load_cases(load_cases, LID_combinations, out):
     """
