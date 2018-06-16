@@ -128,6 +128,7 @@ class DatabaseClient(BaseClient):
     def _set_assertions(self):
         self._assertions = {name: {'fields': {field for field, _ in table['columns'][2:]},
                                    'query_functions': set(table['query_functions']),
+                                   'query_geometry': set(table['query_geometry']),
                                    'LIDs': set(table['LIDs']),
                                    'IDs': set(table['IDs'])} for name, table in
                             self.header.tables.items()}
@@ -308,6 +309,10 @@ class DatabaseClient(BaseClient):
         if geometry:
 
             for geom_param in geometry:
+
+                if geom_param not in self._assertions[table]['query_geometry']:
+                    raise ValueError(f"Invalid geometric parameter: '{geom_param}'")
+
                 missing_IDs = {str(ID) for ID in IDs2read if ID not in geometry[geom_param]}
 
                 if missing_IDs:

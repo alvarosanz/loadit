@@ -48,7 +48,7 @@ class DatabaseHeader(object):
                 self.hash = binascii.hexlify(f.read()).decode()
 
             # Load tables headers
-            from loadit.queries import query_functions
+            from loadit.queries import query_functions, query_geometry
             self.nbytes = 0
             self.tables = dict()
 
@@ -73,6 +73,12 @@ class DatabaseHeader(object):
                     self.tables[name]['query_functions'] = list(query_functions[name])
                 except:
                     self.tables[name]['query_functions'] = list()
+
+                # Load query geometry
+                try:
+                    self.tables[name]['query_geometry'] = list(query_geometry[name])
+                except:
+                    self.tables[name]['query_geometry'] = list()
 
     def info(self, print_to_screen=True, detailed=False):
         """
@@ -116,7 +122,13 @@ class DatabaseHeader(object):
                 info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
                 info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in table['columns']]) + '|')
                 info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
-                info.append('')
+
+                if table['query_functions']:
+                    info.append("\nother fields: {}".format(', '.join(table['query_functions'])))
+
+                if table['query_geometry']:
+                    info.append("geometry: {}".format(', '.join(table['query_geometry'])))
+
                 info.append('')
         else:
             info.append(f"{len(self.tables)} table/s:")

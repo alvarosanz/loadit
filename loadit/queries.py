@@ -200,21 +200,38 @@ def stress_2D(value, thickness, out):
 
 query_functions = {
     'ELEMENT FORCES - QUAD4 (33)': {
-        'sx': [stress_2D, ('NX', 'THK')],
-        'sy': [stress_2D, ('NY', 'THK')],
-        'sxy': [stress_2D, ('NXY', 'THK')],
         'VonMises': [von_mises_2D, ('NX', 'NY', 'NXY')],
         'MaxPpal': [max_ppal_2D, ('NX', 'NY', 'NXY')],
         'MinPpal': [min_ppal_2D, ('NX', 'NY', 'NXY')],
         'MaxShear': [max_shear_2D, ('NX', 'NY', 'NXY')],
+        'sx': [stress_2D, ('NX', 'thickness')],
+        'sy': [stress_2D, ('NY', 'thickness')],
+        'sxy': [stress_2D, ('NXY', 'thickness')],
+        'sVonMises': [von_mises_2D, ('sx', 'sy', 'sxy')],
+        'sMaxPpal': [max_ppal_2D, ('sx', 'sy', 'sxy')],
+        'sMinPpal': [min_ppal_2D, ('sx', 'sy', 'sxy')],
+        'sMaxShear': [max_shear_2D, ('sx', 'sy', 'sxy')],
     },
     'ELEMENT FORCES - TRIA3 (74)': {
-        'sx': [stress_2D, ('NX', 'THK')],
-        'sy': [stress_2D, ('NY', 'THK')],
-        'sxy': [stress_2D, ('NXY', 'THK')],
         'VonMises': [von_mises_2D, ('NX', 'NY', 'NXY')],
         'MaxPpal': [max_ppal_2D, ('NX', 'NY', 'NXY')],
         'MinPpal': [min_ppal_2D, ('NX', 'NY', 'NXY')],
         'MaxShear': [max_shear_2D, ('NX', 'NY', 'NXY')],
+        'sx': [stress_2D, ('NX', 'thickness')],
+        'sy': [stress_2D, ('NY', 'thickness')],
+        'sxy': [stress_2D, ('NXY', 'thickness')],
+        'sVonMises': [von_mises_2D, ('sx', 'sy', 'sxy')],
+        'sMaxPpal': [max_ppal_2D, ('sx', 'sy', 'sxy')],
+        'sMinPpal': [min_ppal_2D, ('sx', 'sy', 'sxy')],
+        'sMaxShear': [max_shear_2D, ('sx', 'sy', 'sxy')],
+    },
+}
+
+query_geometry = {
+    'ELEMENT FORCES - QUAD4 (33)': {
+        'thickness',
+    },
+    'ELEMENT FORCES - TRIA3 (74)': {
+        'thickness',
     },
 }
