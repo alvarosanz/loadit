@@ -644,6 +644,7 @@ def start_worker(server_address, central_address, root_path,
 
 def start_workers(central_address, root_path, manager, user, password,
                   n_workers=None, backup=False, debug=False):
+    import loadit.queries # Pre-load this heavy module
 
     if not n_workers:
         n_workers = cpu_count()
