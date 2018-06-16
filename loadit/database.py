@@ -47,10 +47,11 @@ class DatabaseHeader(object):
             with open(os.path.join(path, f'##header.{self.checksum_method}'), 'rb') as f:
                 self.checksum = binascii.hexlify(f.read()).decode()
 
+            # Load tables headers
+            from loadit.queries import query_functions
             self.nbytes = 0
             self.tables = dict()
 
-            # Load tables headers
             for name in self.checksums:
 
                 # Load table header
@@ -66,6 +67,12 @@ class DatabaseHeader(object):
                         self.tables[name]['LIDs'] = np.fromfile(file, dtype=dtype).tolist()
                     elif i == 1:
                         self.tables[name]['IDs'] = np.fromfile(file, dtype=dtype).tolist()
+
+                # Load query functions
+                try:
+                    self.tables[name]['query_functions'] = list(query_functions[name])
+                except:
+                    self.tables[name]['query_functions'] = list()
 
     def info(self, print_to_screen=True, detailed=False):
         """
@@ -673,17 +680,7 @@ class MemoryHandler(object):
         """
 
         # Check aggregation options
-        levels = {field.count('-') for field in fields}
-        self.level = levels.pop()
-
-        if not groups and self.level == 1:
-            self.level = 2
-
-        if levels or self.level > 2:
-            raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
-
-        if self.level == 0 and groups:
-            raise ValueError('A grouped query must be aggregated at least one time!')
+        self.level = check_aggregation_options(fields, groups)
 
         # Field processing
         self._arrays = dict()
@@ -824,6 +821,35 @@ class MemoryHandler(object):
         """
         return field in self._arrays
 
+
+def check_aggregation_options(fields, groups):
+    aggregations_level = None
+
+    for field in fields:
+        aggregations = field.split('-')[1:]
+        level = len(aggregations)
+
+        if not groups and level == 1:
+            level = 2
+
+        if aggregations_level is None:
+            aggregations_level = level
+        elif level != aggregations_level or level > 2:
+            raise ValueError("All aggregations must be one-level (i.e. 'AVG') or two-level (i. e. 'AVG-MAX')")
+
+        if level == 0 and groups:
+            raise ValueError(f"A grouped query must be aggregated at least one time: '{field}'")
+
+        if level == 2 and is_abs(aggregations[-1])[0] == 'AVG':
+            raise ValueError(f"'AVG' aggregation cannot be applied to LIDs: '{field}'")
+
+        for aggregation in aggregations:
+            aggregation = is_abs(aggregation)[0]
+
+            if aggregation not in ('AVG', 'MAX', 'MIN'):
+                raise ValueError(f"Unsupported aggregation method: '{aggregation}'")
+
+    return aggregations_level
 
 def combine_load_cases(load_cases, LID_combinations, out):
     """
@@ -1020,7 +1046,14 @@ def parse_query(query):
         try:
 
             if query[field]:
-                query[field] = {int(key): value for key, value in query[field].items()}
+
+                if field == 'geometry':
+
+                    for geom_param in query[field]:
+                        query[field][geom_param] = {int(key): value for key, value in query[field][geom_param].items()}
+
+                else:
+                    query[field] = {int(key): value for key, value in query[field].items()}
 
         except AttributeError:
             pass

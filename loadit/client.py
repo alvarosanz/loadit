@@ -3,7 +3,7 @@ import json
 import jwt
 import time
 import pyarrow as pa
-from loadit.database import DatabaseHeader, parse_query_file
+from loadit.database import DatabaseHeader, parse_query_file, check_aggregation_options, is_abs
 from loadit.connection import Connection, get_private_key
 from loadit.misc import get_hash
 
@@ -127,6 +127,7 @@ class DatabaseClient(BaseClient):
 
     def _set_assertions(self):
         self._assertions = {name: {'fields': {field for field, _ in table['columns'][2:]},
+                                   'query_functions': set(table['query_functions']),
                                    'LIDs': set(table['LIDs']),
                                    'IDs': set(table['IDs'])} for name, table in
                             self.header.tables.items()}
@@ -241,12 +242,18 @@ class DatabaseClient(BaseClient):
 
         # fields checking
         if fields:
-            pass
+            check_aggregation_options(fields, groups)
+            basic_fields = {is_abs(field.split('-')[0])[0] for field in fields}
+            invalid_fields = [field for field in basic_fields if
+                              field not in self._assertions[table]['fields'] and
+                              field not in self._assertions[table]['query_functions']]
+
+            if invalid_fields:
+                raise ValueError('Invalid field/s: {}'.format(', '.join(invalid_fields)))
 
         # LIDs checking
         if isinstance(LIDs, dict):
             new_LIDs = set()
-            LIDs2read = set()
 
             for new_LID, seq in LIDs.items():
 
@@ -270,14 +277,11 @@ class DatabaseClient(BaseClient):
                 elif new_LID not in self._assertions[table]['LIDs']:
                     raise ValueError(f'Missing LID: {new_LID}')
 
-        else:
-            LIDs2read = LIDs
-
-        if LIDs2read:
-            missing_LIDs = {str(LID) for LID in LIDs2read if LID not in self._assertions[table]['LIDs']}
+        elif LIDs:
+            missing_LIDs = {str(LID) for LID in LIDs if LID not in self._assertions[table]['LIDs']}
 
             if missing_LIDs:
-                raise ValueError('Missing {}s: {}'.format(self.header.tables[table]['columns'][0][0],
+                raise ValueError('Missing {}/s: {}'.format(self.header.tables[table]['columns'][0][0],
                                                           ', '.join(missing_LIDs)))
 
         # IDs and groups checking
@@ -285,9 +289,9 @@ class DatabaseClient(BaseClient):
             empty_groups = {group for group in groups if not groups[group]}
 
             if empty_groups:
-                raise ValueError('Empty groups: {}'.format(', '.join(empty_groups)))
+                raise ValueError('Empty group/s: {}'.format(', '.join(empty_groups)))
 
-            IDs2read = sorted({ID for IDs in groups.values() for ID in IDs})
+            IDs2read = {ID for IDs in groups.values() for ID in IDs}
         else:
             IDs2read = IDs
 
@@ -295,16 +299,38 @@ class DatabaseClient(BaseClient):
             missing_IDs = {str(ID) for ID in IDs2read if ID not in self._assertions[table]['IDs']}
 
             if missing_IDs:
-                raise ValueError('Missing {}s: {}'.format(self.header.tables[table]['columns'][1][0],
+                raise ValueError('Missing {}/s: {}'.format(self.header.tables[table]['columns'][1][0],
                                                           ', '.join(missing_IDs)))
+        else:
+            IDs2read = self._assertions[table]['IDs']
 
         # geometry checking
         if geometry:
-            pass
 
-        # groups checking
-        if groups:
-            pass
+            for geom_param in geometry:
+                missing_IDs = {str(ID) for ID in IDs2read if ID not in geometry[geom_param]}
+
+                if missing_IDs:
+                    raise ValueError("Missing {}/s in geometry inputs ('{}'): {}".format(self.header.tables[table]['columns'][1][0],
+                                                                                         geom_param, ', '.join(missing_IDs)))
+
+                for ID, value in geometry[geom_param].items():
+
+                    if not type(value) is float:
+                        raise TypeError('Geometry value must be a float!')
+
+        # weights checking
+        if weights:
+            missing_IDs = {str(ID) for ID in IDs2read if ID not in weights}
+
+            if missing_IDs:
+                raise ValueError('Missing {}/s in weights inputs: {}'.format(self.header.tables[table]['columns'][1][0],
+                                                                            ', '.join(missing_IDs)))
+
+            for ID, value in weights.items():
+
+                if not type(value) is float:
+                    raise TypeError('weight value must be a float!')
 
     def _request(self, **kwargs):
         """
