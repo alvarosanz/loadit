@@ -224,8 +224,12 @@ class DatabaseServer(socketserver.TCPServer):
                 self.current_session = {'is_admin': True}
 
             elif 'password' in data:
-                error_msg = 'Wrong username or password!'
-                self.current_session = self.sessions.get_session(data['user'], data['password'])
+
+                try:
+                    self.current_session = self.sessions.get_session(data['user'], data['password'])
+                except KeyError:
+                    error_msg = 'Wrong username or password!'
+                    raise PermissionError()
 
                 from loadit.__init__ import __version__
 
@@ -245,14 +249,20 @@ class DatabaseServer(socketserver.TCPServer):
                     connection.send_secret(authentication)
 
             elif 'authentication' in data:
-                self.current_session = jwt.decode(data['authentication'].encode(), self.master_key)
+
+                try:
+                    self.current_session = jwt.decode(data['authentication'].encode(), self.master_key)
+                except Exception:
+                    error_msg = 'Invalid token!'
+                    raise PermissionError()
+
             else:
                 raise PermissionError()
 
             connection.send(b'Access granted!')
             return True
 
-        except Exception:
+        except PermissionError:
             connection.send(exception=error_msg)
             return False
 
@@ -301,7 +311,7 @@ class CentralServer(DatabaseServer):
 
         try:
             self.sessions.get_session('admin', password)
-        except Exception:
+        except KeyError:
             raise PermissionError('Wrong password!')
 
         manager = Manager()
