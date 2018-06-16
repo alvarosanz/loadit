@@ -28,11 +28,11 @@ class TableData(object):
 
     @property
     def LIDs(self):
-        return np.array(self._LIDs, dtype=self._LIDs.dtype)
+        return np.array(self._LIDs, dtype=np.int64)
 
     @property
     def IDs(self):
-        return np.array(self._IDs, dtype=self._IDs.dtype)
+        return np.array(self._IDs, dtype=np.int64)
 
     @property
     def fields(self):
