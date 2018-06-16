@@ -337,16 +337,16 @@ class CentralServer(DatabaseServer):
 
     def info(self, print_to_screen=True):
         info = list()
-        info.append(f"User: {self.current_session['user']}")
+        info.append(f"user: {self.current_session['user']}")
 
         if self.current_session['is_admin']:
-            info.append(f"Administrator privileges")
+            info.append(f"administrator privileges")
         elif self.current_session['create_allowed']:
-            info.append(f"Regular privileges; database creation allowed")
+            info.append(f"regular privileges; database creation allowed")
         else:
-            info.append(f"Regular privileges")
+            info.append(f"regular privileges")
 
-        info.append(f"Address: {self.server_address}")
+        info.append(f"address: {self.server_address}")
         info.append(f"\n{len(self.nodes)} nodes ({sum(len(node.workers) for node in self.nodes.values())} workers):")
 
         for node_address, node in self.nodes.items():
@@ -365,8 +365,6 @@ class CentralServer(DatabaseServer):
                     info.append(f"  '{database}' [read-only]")
                 else:
                     info.append(f"  '{database}'")
-        else:
-            info.append(f"\nNo databases")
 
         info = '\n'.join(info)
 
@@ -703,7 +701,7 @@ def get_database_hash(header_file):
     with open(header_file) as f:
         header = json.load(f)
 
-    with open(str(header_file)[:-4] + header['checksum_method'], 'rb') as f:
+    with open(str(header_file)[:-4] + header['hash_function'], 'rb') as f:
         return binascii.hexlify(f.read()).decode()
 
 

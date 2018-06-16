@@ -47,7 +47,7 @@ def get_hasher(hash_type):
     elif hash_type == 'sha256':
         return hashlib.sha256()
     else:
-        raise ValueError(f"Unsupported checksum method: {hash_type}")
+        raise ValueError(f"Unsupported hash method: {hash_type}")
 
 
 def get_hash(value):

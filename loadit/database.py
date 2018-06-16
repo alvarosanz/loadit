@@ -43,16 +43,16 @@ class DatabaseHeader(object):
             if self.version.split('.')[-2] != __version__.split('.')[-2]:
                 raise ValueError(f"Not supported version!")
 
-            # Load database header checksum
-            with open(os.path.join(path, f'##header.{self.checksum_method}'), 'rb') as f:
-                self.checksum = binascii.hexlify(f.read()).decode()
+            # Load database hash
+            with open(os.path.join(path, f'##header.{self.hash_function}'), 'rb') as f:
+                self.hash = binascii.hexlify(f.read()).decode()
 
             # Load tables headers
             from loadit.queries import query_functions
             self.nbytes = 0
             self.tables = dict()
 
-            for name in self.checksums:
+            for name in self.hashes:
 
                 # Load table header
                 with open(os.path.join(os.path.join(path, name), '#header.json')) as f:
@@ -93,25 +93,40 @@ class DatabaseHeader(object):
         info = list()
 
         # General database info
-        info.append(f'Version: {self.version}')
-        info.append(f'Size: {humansize(self.nbytes)}'.format())
+
+        if detailed:
+            info.append(f'hash: {self.hash}')
+            info.append(f'version: {self.version}')
+
+        info.append(f'size: {humansize(self.nbytes)}'.format())
         info.append('')
 
-        # Tables info
-        for table in self.tables.values():
-            ncols = len(table['columns'])
-            info.append(f"Table: '{table['name']}' ({table['columns'][0][0]}: {len(table['LIDs'])}, {table['columns'][1][0]}: {len(table['IDs'])})")
-            info.append('   ' + ' '.join(['_' * 6 for i in range(ncols)]))
-            info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
-            info.append('  |' + '|'.join([field.center(6) for field, _ in table['columns']]) + '|')
-            info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
-            info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
-            info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in table['columns']]) + '|')
-            info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
-            info.append('')
+        if detailed:
+
+            # Tables info
+            for table in self.tables.values():
+                ncols = len(table['columns'])
+                info.append(f"table: '{table['name']}'")
+                info.append(f"{table['columns'][0][0]}s: {len(table['LIDs'])}")
+                info.append(f"{table['columns'][1][0]}s: {len(table['IDs'])}")
+                info.append('   ' + ' '.join(['_' * 6 for i in range(ncols)]))
+                info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
+                info.append('  |' + '|'.join([field.center(6) for field, _ in table['columns']]) + '|')
+                info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
+                info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
+                info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in table['columns']]) + '|')
+                info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
+                info.append('')
+                info.append('')
+        else:
+            info.append(f"{len(self.tables)} table/s:")
+
+            for table in self.tables:
+                info.append(f"    '{table}'")
 
         # Restore points info
-        info.append('Restore points:')
+        info.append('')
+        info.append('restore point/s:')
 
         for i, (batch_name, batch_date, batch_files) in enumerate(self.batches):
             info.append(f"  {i} - '{batch_name}': {batch_date}")
@@ -228,12 +243,12 @@ class Database(object):
         for name, header in self.header.tables.items():
 
             # Check table fields integrity
-            for filename, checksum in header['batches'][-1][2].items():
+            for filename, hash in header['batches'][-1][2].items():
                 field_file = os.path.join(self.path, name, filename)
 
                 with open(field_file, 'rb') as f:
 
-                    if checksum != hash_bytestr(f, get_hasher(self.header.checksum_method)):
+                    if hash != hash_bytestr(f, get_hasher(self.header.hash_function)):
                         files_corrupted.append(field_file)
 
             # Check table header integrity
@@ -241,7 +256,7 @@ class Database(object):
 
             with open(header_file, 'rb') as f:
 
-                if self.header.checksums[header['name']] != hash_bytestr(f, get_hasher(self.header.checksum_method)):
+                if self.header.hashes[header['name']] != hash_bytestr(f, get_hasher(self.header.hash_function)):
                     files_corrupted.append(header_file)
 
         # Check database header integrity
@@ -249,7 +264,7 @@ class Database(object):
 
         with open(database_header_file, 'rb') as f:
 
-            if self.header.checksum != hash_bytestr(f, get_hasher(self.header.checksum_method)):
+            if self.header.hash != hash_bytestr(f, get_hasher(self.header.hash_function)):
                 files_corrupted.append(database_header_file)
 
         # Summary
@@ -334,7 +349,7 @@ class Database(object):
 
         self.header.batches.append([batch_name, None, [os.path.basename(file) for file in files]])
         assembly_database(self.path, self.header.tables, self.header.batches,
-                          self.max_memory, self.header.checksum_method)
+                          self.max_memory, self.header.hash_function)
         self.load()
         print('Database updated successfully!')
 
@@ -379,7 +394,7 @@ class Database(object):
                 shutil.rmtree(os.path.join(self.path, name))
 
         assembly_database(self.path, {name: self.header.tables[name] for name in self.tables},
-                          self.header.batches[:batch_index + 1], self.max_memory, self.header.checksum_method)
+                          self.header.batches[:batch_index + 1], self.max_memory, self.header.hash_function)
         self.load()
         print(f"Database restored to '{batch_name}' state successfully!")
 

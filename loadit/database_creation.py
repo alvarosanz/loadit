@@ -128,13 +128,13 @@ def close_table(header):
         pass
 
 
-def assembly_database(database_path, headers, batches, max_chunk_size, checksum_method='sha256'):
+def assembly_database(database_path, headers, batches, max_chunk_size, hash_function='sha256'):
 
     for name, header in headers.items():
         create_transpose(header, max_chunk_size)
-        create_table_header(header, batches[-1][0], checksum_method)
+        create_table_header(header, batches[-1][0], hash_function)
 
-    create_database_header(database_path, headers, batches, checksum_method)
+    create_database_header(database_path, headers, batches, hash_function)
 
 
 def create_transpose(header, max_chunk_size):
@@ -172,7 +172,7 @@ def create_transpose(header, max_chunk_size):
                 i0 += n_IDs_per_chunk
 
 
-def create_table_header(header, batch_name, checksum_method):
+def create_table_header(header, batch_name, hash_function):
     # Set restore points
     if header['batches'] and header['batches'][-1][0] == batch_name:
         check = True
@@ -188,11 +188,11 @@ def create_table_header(header, batch_name, checksum_method):
 
             if check:
 
-                if header['batches'][-1][2][field + '.bin'] != hash_bytestr(f, get_hasher(checksum_method)):
+                if header['batches'][-1][2][field + '.bin'] != hash_bytestr(f, get_hasher(hash_function)):
                     print(f"ERROR: '{os.path.join(header['path'], field + '.bin')} is corrupted!'")
 
             else:
-                header['batches'][-1][2][field + '.bin'] = hash_bytestr(f, get_hasher(checksum_method))
+                header['batches'][-1][2][field + '.bin'] = hash_bytestr(f, get_hasher(hash_function))
 
     table_header = {
         'name': header['name'],
@@ -204,24 +204,24 @@ def create_table_header(header, batch_name, checksum_method):
         json.dump(table_header, f)
 
 
-def create_database_header(database_path, headers, batches, checksum_method):
+def create_database_header(database_path, headers, batches, hash_function):
 
     if batches[-1][1] is None:
         batches[-1][1] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-    checksums = dict()
+    hashes = dict()
 
     for table in headers:
 
         with open(os.path.join(database_path, table, '#header.json'), 'rb') as f:
-            checksums[table] = hash_bytestr(f, get_hasher(checksum_method))
+            hashes[table] = hash_bytestr(f, get_hasher(hash_function))
 
     from loadit.__init__ import __version__
 
     database_header = {
         'version': __version__,
-        'checksum_method': checksum_method,
-        'checksums': checksums,
+        'hash_function': hash_function,
+        'hashes': hashes,
         'batches': batches
     }
 
@@ -230,5 +230,5 @@ def create_database_header(database_path, headers, batches, checksum_method):
     with open(database_header_file, 'w') as f:
         json.dump(database_header, f)
 
-    with open(database_header_file, 'rb') as f_in, open(os.path.splitext(database_header_file)[0] + '.' + checksum_method, 'wb') as f_out:
-        f_out.write(hash_bytestr(f_in, get_hasher(checksum_method), ashexstr=False))
+    with open(database_header_file, 'rb') as f_in, open(os.path.splitext(database_header_file)[0] + '.' + hash_function, 'wb') as f_out:
+        f_out.write(hash_bytestr(f_in, get_hasher(hash_function), ashexstr=False))
