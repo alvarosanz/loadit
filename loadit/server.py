@@ -514,9 +514,11 @@ class WorkerServer(DatabaseServer):
 
         try:
             connection = Connection(self.central, private_key=self.private_key)
+            from loadit.__init__ import __version__
             connection.send_secret(json.dumps({'user': user,
                                                'password': password,
-                                               'request': 'master_key'}).encode())
+                                               'request': 'master_key',
+                                               'version': __version__}).encode())
             self.master_key = connection.recv_secret()
             connection.send(msg={'request_type': 'add_worker',
                                  'worker_address': self.server_address,
