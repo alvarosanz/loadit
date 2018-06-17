@@ -45,6 +45,7 @@ class DatabaseHeader(object):
 
             # Load tables headers
             from loadit.queries import query_functions, query_geometry
+            self.name = os.path.basename(path)
             self.nbytes = 0
             self.tables = dict()
 
@@ -95,7 +96,7 @@ class DatabaseHeader(object):
         info = list()
 
         # General database info
-
+        info.append(f"name: '{self.name}'")
         info.append(f'version: {self.version}')
         info.append(f'size: {humansize(self.nbytes)}'.format())
         info.append('')
