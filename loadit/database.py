@@ -133,13 +133,18 @@ class DatabaseHeader(object):
         info.append('')
         info.append('restore point/s:')
 
-        for i, (batch_name, batch_hash, batch_date, batch_files) in enumerate(self.batches):
-            info.append(f"  {i} - '{batch_name}': {batch_date} [{batch_hash}]")
+        for i, (batch_name, batch_hash, batch_date, batch_files, batch_comment) in enumerate(self.batches):
+            info.append(f"{str(i).rjust(4)} - '{batch_name}': {batch_date} [{batch_hash}]")
 
             if detailed:
 
+                if batch_comment:
+                    info.append(f'\n        {batch_comment}')
+
+                info.append(f'\n        {len(batch_files)} file/s:')
+
                 for file in batch_files:
-                    info.append(f'        {file}')
+                    info.append(f'          {file}')
 
                 info.append('')
 
@@ -152,8 +157,8 @@ class DatabaseHeader(object):
             return info
 
 
-def create_database(files, database_path, tables_specs=None, overwrite=False,
-                    table_generator=None, max_memory=1e9):
+def create_database(files, database_path, comment='', tables_specs=None,
+                    overwrite=False, table_generator=None, max_memory=1e9):
     """
     Create a new database from .pch files.
 
@@ -163,6 +168,8 @@ def create_database(files, database_path, tables_specs=None, overwrite=False,
         List of .pch files.
     database_path : str
         Database path.
+    comment : str
+        Batch comment.
     tables_specs : dict, optional
         Tables specifications. If not provided or None, default ones are used.
     overwrite : bool, optional
@@ -175,7 +182,7 @@ def create_database(files, database_path, tables_specs=None, overwrite=False,
     Path(database_path).mkdir(parents=True, exist_ok=overwrite)
     print('Creating database ...')
     database_path = database_path
-    batches = [['Initial batch', None, None, [os.path.basename(file) for file in files]]]
+    batches = [['Initial batch', None, None, [os.path.basename(file) for file in files], comment]]
 
     try:
         headers = dict()
@@ -310,7 +317,7 @@ class Database(object):
 
         return tables_specs
 
-    def append(self, files, batch_name, table_generator=None):
+    def append(self, files, batch_name, comment='', table_generator=None):
         """
         Append new results to database. This operation is reversible.
 
@@ -320,6 +327,8 @@ class Database(object):
             List of .pch files.
         batch_name : str
             Batch name.
+        comment : str
+            Batch comment.
         table_generator : generator, optional
             A generator which yields tables.
         """
@@ -344,7 +353,7 @@ class Database(object):
             self.restore(self.header.batches[-1][0])
             raise e
 
-        self.header.batches.append([batch_name, None, None, [os.path.basename(file) for file in files]])
+        self.header.batches.append([batch_name, None, None, [os.path.basename(file) for file in files], comment])
         assembly_database(self.path, self.header.tables, self.header.batches,
                           self.max_memory, self.header.hash_function)
         self.load()

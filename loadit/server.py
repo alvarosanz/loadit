@@ -128,7 +128,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                         raise FileExistsError(f"Database already exists at '{query['path']}'!")
 
                     connection.send(msg=get_tables_specs())
-                    db = create_database(query['files'], path, table_generator=connection.recv_tables())
+                    db = create_database(query['files'], path, query['comment'], table_generator=connection.recv_tables())
                     msg = 'Database created successfully!'
                 else:
                     db = Database(path)
@@ -139,7 +139,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                     batch = db.query(**parse_query(query), return_dataframe=False)
                 elif query['request_type'] == 'append_to_database':
                     connection.send(msg=db._get_tables_specs())
-                    db.append(query['files'], query['batch'], table_generator=connection.recv_tables())
+                    db.append(query['files'], query['batch'], query['comment'], table_generator=connection.recv_tables())
                     msg = 'Database created successfully!'
                 elif query['request_type'] == 'restore_database':
                     db.restore(query['batch'])

@@ -139,7 +139,7 @@ class DatabaseClient(BaseClient):
         """
         print(self._request(request_type='check')['msg'])
 
-    def append(self, files, batch_name):
+    def append(self, files, batch_name, comment=''):
         """
         Append new results to database. This operation is reversible.
 
@@ -149,8 +149,11 @@ class DatabaseClient(BaseClient):
             List of .pch files.
         batch_name : str
             Batch name.
+        comment : str
+            Batch comment.
         """
-        print(self._request(request_type='append_to_database', files=files, batch=batch_name)['msg'])
+        print(self._request(request_type='append_to_database', files=files,
+                            batch=batch_name, comment=comment)['msg'])
 
     def restore(self, batch_name):
         """
@@ -371,8 +374,9 @@ class Client(BaseClient):
         self.database = DatabaseClient(self.server_address, database,
                                        self._private_key, self._authentication)
 
-    def create_database(self, files, database):
-        data = self._request(is_redirected=True, request_type='create_database', files=files, path=database)
+    def create_database(self, files, database, comment=''):
+        data = self._request(is_redirected=True, request_type='create_database',
+                             files=files, path=database, comment=comment)
         print(data['msg'])
         self.database = DatabaseClient(self.server_address, database,
                                        self._private_key, self._authentication, data['header'])
