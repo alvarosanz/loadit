@@ -9,7 +9,7 @@ import numpy as np
 import pyarrow as pa
 from loadit.table_data import TableData
 from loadit.tables_specs import get_tables_specs
-from loadit.database_creation import create_tables, assembly_database, open_table
+from loadit.database_creation import create_tables, assembly_database, open_table, create_database_header
 from loadit.misc import humansize, get_hasher, hash_bytestr
 
 
@@ -149,6 +149,14 @@ class DatabaseHeader(object):
 
                 info.append('')
 
+        # Attachments info
+        if self.attachments:
+            info.append('')
+            info.append(f'{len(self.attachments)} attachment/s:')
+
+            for attachment in self.attachments:
+                info.append(f"    {attachment}")
+
         # Summary
         info = '\n'.join(info)
 
@@ -181,6 +189,7 @@ def create_database(files, database_path, comment='', tables_specs=None,
         Memory limit (in bytes).
     """
     Path(database_path).mkdir(parents=True, exist_ok=overwrite)
+    (Path(database_path) / '.attachments').mkdir(exist_ok=overwrite)
     print('Creating database ...')
     database_path = database_path
     batches = [['Initial batch', None, None, [os.path.basename(file) for file in files], comment]]
@@ -272,6 +281,15 @@ class Database(object):
                 if self.header.table_hashes[header['name']] != hash_bytestr(f, get_hasher(self.header.hash_function)):
                     files_corrupted.append(header_file)
 
+        # Check attachments
+        for attachment in self.header.attachments:
+            attachment_file = os.path.join(self.path, '.attachments', attachment)
+
+            with open(attachment_file, 'rb') as f:
+
+                if self.header.attachments[attachment] != hash_bytestr(f, get_hasher(self.header.hash_function)):
+                    files_corrupted.append(attachment_file)
+
         # Summary
         info = list()
 
@@ -318,6 +336,77 @@ class Database(object):
 
         return tables_specs
 
+
+    def _write_header(self):
+        """
+        Write database header file.
+        """
+        create_database_header(self.path, self.header.tables, self.header.batches, self.header.hash_function,
+                               self.header.attachments, self.header.table_hashes)
+
+    def add_attachment(self, file, copy=True):
+        """
+        Add a new attachment (consisting on one or more files) to the database.
+
+        Parameters
+        ----------
+        file : str
+            Attachment file path.
+        copy : bool
+            Whether to copy or not the file.
+        """
+        name = os.path.basename(file)
+
+        if name in self.header.attachments:
+            raise FileExistsError(f"Already existing attachment!")
+
+        attachment_file = os.path.join(self.path, '.attachments', name)
+
+        if copy:
+            shutil.copyfile(file, attachment_file)
+        else:
+            os.rename(file, attachment_file)
+
+        with open(attachment_file, 'rb') as f:
+            self.header.attachments[name] = hash_bytestr(f, get_hasher(self.header.hash_function))
+
+        self._write_header()
+
+    def remove_attachment(self, name):
+        """
+        Remove an attachment.
+
+        Parameters
+        ----------
+        name : str
+            Attachment name.
+        """
+
+        if name not in self.header.attachments:
+            raise FileNotFoundError(f"Attachment not found!")
+
+        os.remove(os.path.join(self.path, '.attachments', name))
+        del self.header.attachments[name]
+        self._write_header()
+
+    def download_attachment(self, name, path):
+        """
+        Download an attachment.
+
+        Parameters
+        ----------
+        name : str
+            Attachment name.
+        path : str
+            Output path.
+        """
+
+        if name not in self.header.attachments:
+            raise FileNotFoundError(f"Attachment not found!")
+
+        shutil.copyfile(os.path.join(self.path, '.attachments', name),
+                        os.path.join(path, name))
+
     def append(self, files, batch_name, comment='', table_generator=None):
         """
         Append new results to database. This operation is reversible.
@@ -356,7 +445,7 @@ class Database(object):
 
         self.header.batches.append([batch_name, None, None, [os.path.basename(file) for file in files], comment])
         assembly_database(self.path, self.header.tables, self.header.batches,
-                          self.max_memory, self.header.hash_function)
+                          self.max_memory, self.header.hash_function, self.header.attachments)
         self.load()
         print('Database updated successfully!')
 
@@ -402,7 +491,8 @@ class Database(object):
 
         batch_hash_old = self.header.batches[batch_index][1]
         assembly_database(self.path, {name: self.header.tables[name] for name in self.tables},
-                          self.header.batches[:batch_index + 1], self.max_memory, self.header.hash_function)
+                          self.header.batches[:batch_index + 1], self.max_memory,
+                          self.header.hash_function, self.header.attachments)
         self.load()
 
         if self.header.batches[-1][1] != batch_hash_old:

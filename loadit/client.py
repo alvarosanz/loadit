@@ -1,3 +1,4 @@
+import os
 import getpass
 import json
 import jwt
@@ -85,6 +86,16 @@ class BaseClient(object):
                 reader = pa.RecordBatchStreamReader(pa.BufferReader(connection.recv().getbuffer()))
                 print('Done!')
                 data['batch'] = reader.read_next_batch()
+            elif kwargs['request_type'] == 'add_attachment':
+                print(data['msg'], end=' ')
+                connection.send_file(kwargs['file'])
+                data = connection.recv()
+                print('Done!')
+            elif kwargs['request_type'] == 'download_attachment':
+                print(data['msg'], end=' ')
+                connection.recv_file(os.path.join(kwargs['output_path'], kwargs['name']))
+                data = connection.recv()
+                print('Done!')
 
         finally:
             connection.kill()
@@ -138,6 +149,41 @@ class DatabaseClient(BaseClient):
         Check database integrity.
         """
         print(self._request(request_type='check')['msg'])
+
+    def add_attachment(self, file):
+        """
+        Add a new attachment (consisting on one or more files) to the database.
+
+        Parameters
+        ----------
+        file : str
+            Attachment file path.
+        """
+        self._request(request_type='add_attachment', file=file)
+
+    def remove_attachment(self, name):
+        """
+        Remove an attachment.
+
+        Parameters
+        ----------
+        name : str
+            Attachment name.
+        """
+        print(self._request(request_type='remove_attachment', name=name)['msg'])
+
+    def download_attachment(self, name, path):
+        """
+        Download an attachment.
+
+        Parameters
+        ----------
+        name : str
+            Attachment name.
+        path : str
+            Output path.
+        """
+        self._request(request_type='download_attachment', name=name, output_path=path)
 
     def append(self, files, batch_name, comment=''):
         """

@@ -83,7 +83,8 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
                 raise ValueError("Database '{}' not available!".format(query['path']))
 
             if  query['request_type'] in ('create_database', 'append_to_database',
-                                          'restore_database', 'remove_database'):
+                                          'restore_database', 'remove_database',
+                                          'add_attachment', 'remove_attachment'):
                 node = self.server.server_address[0]
             else:
                 node = None
@@ -118,7 +119,9 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
             with self.server.database_lock.acquire(query['path'],
                                                    block=(query['request_type'] in ('create_database',
                                                                                     'append_to_database',
-                                                                                    'restore_database'))):
+                                                                                    'restore_database',
+                                                                                    'add_attachment',
+                                                                                    'remove_attachment'))):
                 path = os.path.join(self.server.root_path, query['path'])
                 msg = ''
 
@@ -144,11 +147,33 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 elif query['request_type'] == 'restore_database':
                     db.restore(query['batch'])
                     msg = f"Database restored to '{query['batch']}' state successfully!"
+                elif query['request_type'] == 'add_attachment':
+
+                    if query['file'] in db.header.attachments:
+                        raise FileExistsError(f"Already existing attachment!")
+
+                    attachment_file = os.path.join(path, '.attachments', os.path.basename(query['file']))
+                    connection.send(msg={'msg': 'Transferring file ...'})
+                    connection.recv_file(attachment_file)
+                    db.add_attachment(attachment_file, copy=False)
+                elif query['request_type'] == 'remove_attachment':
+                    db.remove_attachment(query['name'])
+                    msg = 'Attachment removed successfully!'
+                elif query['request_type'] == 'download_attachment':
+
+                    if query['name'] not in db.header.attachments:
+                        raise FileNotFoundError(f"Attachment not found!")
+
+                    attachment_file = os.path.join(path, '.attachments', query['name'])
+                    connection.send(msg={'msg': f"Downloading '{query['name']}' ({humansize(os.path.getsize(attachment_file))}) ..."})
+                    connection.send_file(attachment_file)
 
                 if self.server.current_session['database_modified']:
                     self.server.databases[query['path']] = get_database_hash(os.path.join(path, '##header.json'))
 
-                if query['request_type'] in ('header', 'create_database', 'append_to_database', 'restore_database'):
+                if query['request_type'] in ('header', 'create_database',
+                                             'append_to_database', 'restore_database',
+                                             'add_attachment', 'remove_attachment'):
                     header = db.header.__dict__
                 else:
                     header = None
@@ -276,7 +301,8 @@ class DatabaseServer(socketserver.TCPServer):
                                           'sync_databases', 'recv_databases',
                                           'add_session', 'remove_session', 'list_sessions') or
                 query['request_type'] == 'create_database' and not self.current_session['create_allowed'] or
-                query['request_type'] in ('append_to_database', 'restore_database', 'remove_database') and
+                query['request_type'] in ('append_to_database', 'restore_database', 'remove_database',
+                                          'add_attachment', 'remove_attachment') and
                 (not self.current_session['databases'] or query('path') not in self.current_session['databases'])):
                 raise PermissionError('Not enough privileges!')
 

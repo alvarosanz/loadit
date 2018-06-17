@@ -128,13 +128,14 @@ def close_table(header):
         pass
 
 
-def assembly_database(database_path, headers, batches, max_chunk_size, hash_function='sha256'):
+def assembly_database(database_path, headers, batches, max_chunk_size,
+                      hash_function='sha256', attachments=None):
 
     for name, header in headers.items():
         create_transpose(header, max_chunk_size)
         create_table_header(header, batches[-1][0], hash_function)
 
-    create_database_header(database_path, headers, batches, hash_function)
+    create_database_header(database_path, headers, batches, hash_function, attachments)
 
 
 def create_transpose(header, max_chunk_size):
@@ -194,6 +195,7 @@ def create_table_header(header, batch_name, hash_function):
             else:
                 header['batches'][-1][2][field + '.bin'] = hash_bytestr(f, get_hasher(hash_function))
 
+    # Write table header
     table_header = {
         'name': header['name'],
         'columns': header['columns'],
@@ -204,14 +206,18 @@ def create_table_header(header, batch_name, hash_function):
         json.dump(table_header, f)
 
 
-def create_database_header(database_path, headers, batches, hash_function):
-    table_hashes = dict()
+def create_database_header(database_path, headers, batches, hash_function,
+                           attachments=None, table_hashes=None):
+    # Get table hashes
+    if not table_hashes:
+        table_hashes = dict()
 
-    for table in headers:
+        for table in headers:
 
-        with open(os.path.join(database_path, table, '#header.json'), 'rb') as f:
-            table_hashes[table] = hash_bytestr(f, get_hasher(hash_function))
+            with open(os.path.join(database_path, table, '#header.json'), 'rb') as f:
+                table_hashes[table] = hash_bytestr(f, get_hasher(hash_function))
 
+    # Get hash of current batch
     if batches[-1][1] is None:
         hasher = get_hasher(hash_function)
 
@@ -220,16 +226,19 @@ def create_database_header(database_path, headers, batches, hash_function):
 
         batches[-1][1] = hasher.hexdigest()
 
+    # Set datetime of current batch
     if batches[-1][2] is None:
         batches[-1][2] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
+    # Write database header
     from loadit.__init__ import __version__
 
     database_header = {
         'version': __version__,
         'hash_function': hash_function,
         'table_hashes': table_hashes,
-        'batches': batches
+        'batches': batches,
+        'attachments': dict() if attachments is None else attachments
     }
 
     with open(os.path.join(database_path, '##header.json'), 'w') as f:
