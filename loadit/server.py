@@ -701,8 +701,7 @@ def get_database_hash(header_file):
     with open(header_file) as f:
         header = json.load(f)
 
-    with open(str(header_file)[:-4] + header['hash_function'], 'rb') as f:
-        return binascii.hexlify(f.read()).decode()
+    return header['batches'][-1][1]
 
 
 def send(address, msg, master_key=None, private_key=None, recv=False):

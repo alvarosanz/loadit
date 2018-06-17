@@ -43,10 +43,6 @@ class DatabaseHeader(object):
             if self.version.split('.')[-2] != __version__.split('.')[-2]:
                 raise ValueError(f"Not supported version!")
 
-            # Load database hash
-            with open(os.path.join(path, f'##header.{self.hash_function}'), 'rb') as f:
-                self.hash = binascii.hexlify(f.read()).decode()
-
             # Load tables headers
             from loadit.queries import query_functions, query_geometry
             self.nbytes = 0
@@ -100,10 +96,7 @@ class DatabaseHeader(object):
 
         # General database info
 
-        if detailed:
-            info.append(f'hash: {self.hash}')
-            info.append(f'version: {self.version}')
-
+        info.append(f'version: {self.version}')
         info.append(f'size: {humansize(self.nbytes)}'.format())
         info.append('')
 
@@ -140,8 +133,8 @@ class DatabaseHeader(object):
         info.append('')
         info.append('restore point/s:')
 
-        for i, (batch_name, batch_date, batch_files) in enumerate(self.batches):
-            info.append(f"  {i} - '{batch_name}': {batch_date}")
+        for i, (batch_name, batch_hash, batch_date, batch_files) in enumerate(self.batches):
+            info.append(f"  {i} - '{batch_name}': {batch_date} [{batch_hash}]")
 
             if detailed:
 
@@ -182,7 +175,7 @@ def create_database(files, database_path, tables_specs=None, overwrite=False,
     Path(database_path).mkdir(parents=True, exist_ok=overwrite)
     print('Creating database ...')
     database_path = database_path
-    batches = [['Initial batch', None, [os.path.basename(file) for file in files]]]
+    batches = [['Initial batch', None, None, [os.path.basename(file) for file in files]]]
 
     try:
         headers = dict()
@@ -271,14 +264,6 @@ class Database(object):
                 if self.header.hashes[header['name']] != hash_bytestr(f, get_hasher(self.header.hash_function)):
                     files_corrupted.append(header_file)
 
-        # Check database header integrity
-        database_header_file = os.path.join(self.path, '##header.json')
-
-        with open(database_header_file, 'rb') as f:
-
-            if self.header.hash != hash_bytestr(f, get_hasher(self.header.hash_function)):
-                files_corrupted.append(database_header_file)
-
         # Summary
         info = list()
 
@@ -339,7 +324,7 @@ class Database(object):
             A generator which yields tables.
         """
 
-        if batch_name in {batch_name for batch_name, _, _ in self.header.batches}:
+        if batch_name in {batch[0] for batch in self.header.batches}:
             raise ValueError(f"'{batch_name}' already exists!")
 
         print('Appending to database ...')
@@ -359,7 +344,7 @@ class Database(object):
             self.restore(self.header.batches[-1][0])
             raise e
 
-        self.header.batches.append([batch_name, None, [os.path.basename(file) for file in files]])
+        self.header.batches.append([batch_name, None, None, [os.path.basename(file) for file in files]])
         assembly_database(self.path, self.header.tables, self.header.batches,
                           self.max_memory, self.header.hash_function)
         self.load()
@@ -405,9 +390,14 @@ class Database(object):
                 del self.tables[name]
                 shutil.rmtree(os.path.join(self.path, name))
 
+        batch_hash_old = self.header.batches[batch_index][1]
         assembly_database(self.path, {name: self.header.tables[name] for name in self.tables},
                           self.header.batches[:batch_index + 1], self.max_memory, self.header.hash_function)
         self.load()
+
+        if self.header.batches[-1][1] != batch_hash_old:
+            raise ValueError('Database header is corrupted!')
+
         print(f"Database restored to '{batch_name}' state successfully!")
 
     def query_from_file(self, file, double_precision=False, return_dataframe=True):

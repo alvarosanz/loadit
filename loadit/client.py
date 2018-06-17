@@ -150,10 +150,6 @@ class DatabaseClient(BaseClient):
         batch_name : str
             Batch name.
         """
-
-        if isinstance(files, str):
-            files = [files]
-
         print(self._request(request_type='append_to_database', files=files, batch=batch_name)['msg'])
 
     def restore(self, batch_name):
@@ -376,10 +372,6 @@ class Client(BaseClient):
                                        self._private_key, self._authentication)
 
     def create_database(self, files, database):
-
-        if isinstance(files, str):
-            files = [files]
-
         data = self._request(is_redirected=True, request_type='create_database', files=files, path=database)
         print(data['msg'])
         self.database = DatabaseClient(self.server_address, database,

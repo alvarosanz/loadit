@@ -205,16 +205,23 @@ def create_table_header(header, batch_name, hash_function):
 
 
 def create_database_header(database_path, headers, batches, hash_function):
-
-    if batches[-1][1] is None:
-        batches[-1][1] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
     hashes = dict()
 
     for table in headers:
 
         with open(os.path.join(database_path, table, '#header.json'), 'rb') as f:
             hashes[table] = hash_bytestr(f, get_hasher(hash_function))
+
+    if batches[-1][1] is None:
+        hasher = get_hasher(hash_function)
+
+        for table_hash in hashes.values():
+            hasher.update(table_hash.encode())
+
+        batches[-1][1] = hasher.hexdigest()
+
+    if batches[-1][2] is None:
+        batches[-1][2] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     from loadit.__init__ import __version__
 
@@ -225,10 +232,5 @@ def create_database_header(database_path, headers, batches, hash_function):
         'batches': batches
     }
 
-    database_header_file = os.path.join(database_path, '##header.json')
-
-    with open(database_header_file, 'w') as f:
+    with open(os.path.join(database_path, '##header.json'), 'w') as f:
         json.dump(database_header, f)
-
-    with open(database_header_file, 'rb') as f_in, open(os.path.splitext(database_header_file)[0] + '.' + hash_function, 'wb') as f_out:
-        f_out.write(hash_bytestr(f_in, get_hasher(hash_function), ashexstr=False))
