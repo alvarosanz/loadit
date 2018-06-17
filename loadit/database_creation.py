@@ -205,17 +205,17 @@ def create_table_header(header, batch_name, hash_function):
 
 
 def create_database_header(database_path, headers, batches, hash_function):
-    hashes = dict()
+    table_hashes = dict()
 
     for table in headers:
 
         with open(os.path.join(database_path, table, '#header.json'), 'rb') as f:
-            hashes[table] = hash_bytestr(f, get_hasher(hash_function))
+            table_hashes[table] = hash_bytestr(f, get_hasher(hash_function))
 
     if batches[-1][1] is None:
         hasher = get_hasher(hash_function)
 
-        for table_hash in hashes.values():
+        for table_hash in table_hashes.values():
             hasher.update(table_hash.encode())
 
         batches[-1][1] = hasher.hexdigest()
@@ -228,7 +228,7 @@ def create_database_header(database_path, headers, batches, hash_function):
     database_header = {
         'version': __version__,
         'hash_function': hash_function,
-        'hashes': hashes,
+        'table_hashes': table_hashes,
         'batches': batches
     }
 

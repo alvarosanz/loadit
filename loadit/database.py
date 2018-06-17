@@ -48,7 +48,7 @@ class DatabaseHeader(object):
             self.nbytes = 0
             self.tables = dict()
 
-            for name in self.hashes:
+            for name in self.table_hashes:
 
                 # Load table header
                 with open(os.path.join(os.path.join(path, name), '#header.json')) as f:
@@ -268,7 +268,7 @@ class Database(object):
 
             with open(header_file, 'rb') as f:
 
-                if self.header.hashes[header['name']] != hash_bytestr(f, get_hasher(self.header.hash_function)):
+                if self.header.table_hashes[header['name']] != hash_bytestr(f, get_hasher(self.header.hash_function)):
                     files_corrupted.append(header_file)
 
         # Summary
