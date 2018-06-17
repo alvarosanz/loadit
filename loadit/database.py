@@ -461,6 +461,7 @@ class Database(object):
                                     group, group_IDs in groups.items()}
 
         # Requested LIDs & IDs
+        LID_suffix = ': LID*' if LIDs else ': LID'
         LIDs_queried = self.tables[table]._LIDs if not LIDs else list(LIDs)
         IDs_queried = self.tables[table]._IDs if not IDs else IDs
 
@@ -488,7 +489,7 @@ class Database(object):
                         parameter in geometry}
 
         # Memory pre-allocation
-        mem_handler = MemoryHandler(self.max_memory, fields, LIDs_queried, IDs_queried, groups, float_dtype,
+        mem_handler = MemoryHandler(self.max_memory, LID_suffix, fields, LIDs_queried, IDs_queried, groups, float_dtype,
                                     len(LIDs2read) + len(LIDs_combined_used) if LID_combinations else None)
 
         # Process batches
@@ -547,7 +548,7 @@ class Database(object):
 
                         elif level == 2: # 2nd level
                             aggregate(array, array_agg, aggregation, level,
-                                      LIDs_queried_batch, mem_handler.get(field + ': LID'),
+                                      LIDs_queried_batch, mem_handler.get(field + LID_suffix),
                                       use_previous_agg= batch_index > 0)
 
                     # Absolute value
@@ -572,7 +573,7 @@ class Database(object):
             data = mem_handler.data1.reshape((len(fields), len(LIDs_queried) * len(groups))).T
         else:
             index_names = ['Group'] if groups else [self.header.tables[table]['columns'][1][0]]
-            columns = [field + suffix for field in mem_handler.fields[2] for suffix in ('', ': LID')]
+            columns = [field + suffix for field in mem_handler.fields[2] for suffix in ('', LID_suffix)]
             data = {field: mem_handler.get(field).ravel() for field in columns}
 
         if return_dataframe:
@@ -686,8 +687,8 @@ class MemoryHandler(object):
     Handles memory management in queries.
     """
 
-    def __init__(self, max_memory, fields, LIDs, IDs, groups=None, dtype=np.float32,
-                 n_basic_LIDs=None):
+    def __init__(self, max_memory, LID_suffix, fields, LIDs, IDs, groups=None,
+                 dtype=np.float32, n_basic_LIDs=None):
         """
         Initialize a MemoryHandler instance.
 
@@ -695,6 +696,8 @@ class MemoryHandler(object):
         ----------
         max_memory : int
             Memory limit (in bytes).
+        LID_suffix : str
+            LID column label suffix (i.e. ': LID').
         fields : list of str
             List of fields.
         LIDs : list of int
@@ -733,10 +736,10 @@ class MemoryHandler(object):
                     self._arrays[subfield] = list()
 
                     if level == 2:
-                        self._arrays[subfield + ': LID'] = list()
+                        self._arrays[subfield + LID_suffix] = list()
 
         self.field_seq = [(field, level) for level in self.fields for field in
-                          self.fields[level] if ': LID' not in field]
+                          self.fields[level] if LID_suffix not in field]
 
         # Batch processing (in case query doesn't fit in memory)
         size_per_LC = len(self.fields[0]) * len(IDs) * np.dtype(dtype).itemsize
@@ -782,7 +785,7 @@ class MemoryHandler(object):
 
                 for i, field in enumerate(self.fields[2]):
                     self._arrays[field].append(self.data2[i, :, :])
-                    self._arrays[field + ': LID'].append(self.LIDs2[i, :, :])
+                    self._arrays[field + LID_suffix].append(self.LIDs2[i, :, :])
 
         # Memory pre-allocation: Basic load cases (used only when combining load cases)
         if n_basic_LIDs:
