@@ -539,7 +539,12 @@ class Database(object):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
-        from loadit.queries import query_functions, set_index
+        from loadit.queries import query_functions
+
+        try:
+            query_functions = query_functions[table]
+        except KeyError:
+            query_functions = None
 
         if double_precision:
             float_dtype = np.float64
@@ -630,7 +635,7 @@ class Database(object):
 
                     if level == 0: # Load fields into memory
                         basic_field, is_absolute = is_abs(field)
-                        process_field(field, basic_field, self.tables[table], query_functions[table], geometry,
+                        process_field(field, basic_field, self.tables[table], query_functions, geometry,
                                       mem_handler, fields_processed, read_fields,
                                       batch_index, LIDs2read_batch, IDs ,LID_combinations_batch)
                     else: # Field aggregation
@@ -697,6 +702,7 @@ class Database(object):
 
             return df
         else:
+            from loadit.queries import set_index
 
             if mem_handler.level == 0:
                 index0 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
