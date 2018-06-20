@@ -52,27 +52,14 @@ class Connection(object):
         self.socket.sendall(bytes)
 
     def recv(self):
+        data = self._recv0()
+        size = int(data[:self.header_size - 1].decode())
+        data_type = data[self.header_size - 1:self.header_size].decode()
         buffer = BytesIO()
-        size = 1
-        msg = None
+        buffer.write(data[self.header_size:])
 
         while buffer.tell() < size:
-
-            if (self.pending_data and
-                len(self.pending_data) > self.header_size and
-                (len(self.pending_data) - self.header_size) == int(self.pending_data[:self.header_size - 1].decode())):
-                data = b''
-            else:
-                data = self.socket.recv(self.buffer_size)
-
-            if size == 1:
-                data = self.pending_data + data
-                self.pending_data = b''
-                size = int(data[:self.header_size - 1].decode())
-                data_type = data[self.header_size - 1:self.header_size].decode()
-                data = data[self.header_size:]
-
-            buffer.write(data)
+            buffer.write(self.socket.recv(self.buffer_size))
 
         buffer.seek(size)
         self.pending_data = buffer.read()
@@ -86,6 +73,17 @@ class Connection(object):
             return json.loads(buffer.read().decode())
         elif data_type == '#':
             raise ConnectionError(buffer.read().decode())
+
+    def _recv0(self):
+        data = self.pending_data
+
+        if not (self.pending_data and
+                len(self.pending_data) > self.header_size and
+                (len(self.pending_data) - self.header_size) == int(self.pending_data[:self.header_size - 1].decode())):
+            data += self.socket.recv(self.buffer_size)
+
+        self.pending_data = b''
+        return data
 
     def send_tables(self, files, tables_specs):
         ignored_tables = set()
@@ -132,8 +130,10 @@ class Connection(object):
             while sended:
                 sended = self.socket.send(f.read(self.buffer_size))
 
+        self.recv()
+
     def recv_file(self, file):
-        data = self.socket.recv(self.buffer_size)
+        data = self._recv0()
         size = int(data[:self.header_size].decode())
 
         with open(file, 'wb') as f:
@@ -141,6 +141,8 @@ class Connection(object):
 
             while f.tell() < size:
                 f.write(self.socket.recv(self.buffer_size))
+
+        self.send(b'OK')
 
     def send_secret(self, secret):
 
