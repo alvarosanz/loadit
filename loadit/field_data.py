@@ -100,7 +100,7 @@ class FieldData(object):
 
             if self._data_by_ID is None: # Open file (if not already open)
                 self._data_by_ID = np.memmap(self.file, dtype=self.dtype, shape=self.shape, mode='r',
-                                             offset=self._offset, order='C')
+                                             offset=self._offset, order='F')
 
             # Read data from mapped file
             for i, ID in enumerate(IDs_queried):
