@@ -670,6 +670,7 @@ class WorkerServer(DatabaseServer):
 
 def start_worker(server_address, central_address, root_path,
                  databases, main_lock, locks, locked_databases, user, password, backup, debug):
+    import loadit.queries # Pre-load this heavy module
     database_lock = DatabaseLock(main_lock, locks, locked_databases)
     worker = WorkerServer(server_address, central_address, root_path,
                           databases, main_lock, database_lock, backup, debug)
@@ -678,7 +679,6 @@ def start_worker(server_address, central_address, root_path,
 
 def start_workers(central_address, root_path, manager, user, password,
                   n_workers=None, backup=False, debug=False):
-    import loadit.queries # Pre-load this heavy module
 
     if not n_workers:
         n_workers = cpu_count()
