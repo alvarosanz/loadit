@@ -154,8 +154,8 @@ class DatabaseHeader(object):
             info.append('')
             info.append(f'{len(self.attachments)} attachment/s:')
 
-            for attachment in self.attachments:
-                info.append(f"    {attachment}")
+            for attachment, (_, nbytes) in self.attachments.items():
+                info.append(f"    {attachment} ({humansize(nbytes)})")
 
         # Summary
         info = '\n'.join(info)
@@ -287,7 +287,7 @@ class Database(object):
 
             with open(attachment_file, 'rb') as f:
 
-                if self.header.attachments[attachment] != hash_bytestr(f, get_hasher(self.header.hash_function)):
+                if self.header.attachments[attachment][0] != hash_bytestr(f, get_hasher(self.header.hash_function)):
                     files_corrupted.append(attachment_file)
 
         # Summary
@@ -368,7 +368,8 @@ class Database(object):
             os.rename(file, attachment_file)
 
         with open(attachment_file, 'rb') as f:
-            self.header.attachments[name] = hash_bytestr(f, get_hasher(self.header.hash_function))
+            self.header.attachments[name] = [hash_bytestr(f, get_hasher(self.header.hash_function)),
+                                             os.path.getsize(attachment_file)]
 
         self._write_header()
 
