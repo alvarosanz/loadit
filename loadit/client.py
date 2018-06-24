@@ -274,7 +274,11 @@ class DatabaseClient(BaseClient):
 
         if output_file:
             print(f"Writing '{output_file}' ...", end=' ')
-            df.to_csv(output_file)
+
+            with open(output_file, 'w') as f:
+                f.write(batch.schema.metadata[b'header'].decode() + '\n')
+                df.to_csv(f)
+
             print('Done!')
 
         print('{:.1f} seconds'.format(time.time() - start))

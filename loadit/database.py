@@ -77,6 +77,9 @@ class DatabaseHeader(object):
                 except:
                     self.tables[name]['query_geometry'] = list()
 
+    def get_query_header(self):
+        return {'database': self.name, 'hash': self.batches[-1][1]}
+
     def info(self, print_to_screen=True, detailed=False):
         """
         Display database info.
@@ -699,7 +702,10 @@ class Database(object):
             df = pd.DataFrame(data, columns=columns, index=index, copy=False)
 
             if output_file:
-                df.to_csv(output_file)
+
+                with open(output_file, 'w') as f:
+                    f.write(json.dumps(self.header.get_query_header()) + '\n')
+                    df.to_csv(f)
 
             return df
         else:
@@ -729,7 +735,8 @@ class Database(object):
                 arrays += [pa.array(data[field]) for field in data]
 
             return pa.RecordBatch.from_arrays(arrays, index_names + columns,
-                                              metadata={b'index_columns': json.dumps(index_names).encode()})
+                                              metadata={b'index_columns': json.dumps(index_names).encode(),
+                                                        b'header': json.dumps(self.header.get_query_header()).encode()})
 
 
 def process_field(field, basic_field, table, query_functions, geometry,
