@@ -307,7 +307,8 @@ class DatabaseServer(socketserver.TCPServer):
                 raise PermissionError('Not enough privileges!')
 
         if query['request_type'] in ('recv_databases', 'append_to_database', 'restore_database',
-                                     'create_database', 'remove_database'):
+                                     'create_database', 'remove_database',
+                                     'add_attachment', 'remove_attachment'):
             self.current_session['database_modified'] = True
         else:
             self.current_session['database_modified'] = False
@@ -724,10 +725,8 @@ def get_local_databases(root_path):
 
 def get_database_hash(header_file):
 
-    with open(header_file) as f:
-        header = json.load(f)
-
-    return header['batches'][-1][1]
+    with open(header_file, 'rb') as f:
+        return hash_bytestr(f, get_hasher('sha256'))
 
 
 def send(address, msg, master_key=None, private_key=None, recv=False):
