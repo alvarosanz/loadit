@@ -18,7 +18,7 @@ from loadit.database import Database, create_database, parse_query
 from loadit.sessions import Sessions
 from loadit.tables_specs import get_tables_specs
 from loadit.connection import Connection, get_master_key, get_private_key, get_ip, find_free_port
-from loadit.misc import humansize, LoggerWriter
+from loadit.misc import humansize, LoggerWriter, get_hasher, hash_bytestr
 
 
 SERVER_PORT = 8080
@@ -82,7 +82,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
             if query['request_type'] != 'create_database' and query['path'] not in self.server.databases:
                 raise ValueError("Database '{}' not available!".format(query['path']))
 
-            if  query['request_type'] in ('create_database', 'append_to_database',
+            if  query['request_type'] in ('create_database', 'new_batch',
                                           'restore_database', 'remove_database',
                                           'add_attachment', 'remove_attachment'):
                 node = self.server.server_address[0]
@@ -118,7 +118,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
             with self.server.database_lock.acquire(query['path'],
                                                    block=(query['request_type'] in ('create_database',
-                                                                                    'append_to_database',
+                                                                                    'new_batch',
                                                                                     'restore_database',
                                                                                     'add_attachment',
                                                                                     'remove_attachment'))):
@@ -130,8 +130,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                     if query['path'] in self.server.databases.keys():
                         raise FileExistsError(f"Database already exists at '{query['path']}'!")
 
-                    connection.send(msg=get_tables_specs())
-                    db = create_database(query['files'], path, query['comment'], table_generator=connection.recv_tables())
+                    db = create_database(path)
                     msg = 'Database created successfully!'
                 else:
                     db = Database(path)
@@ -140,10 +139,10 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                     msg = db.check(print_to_screen=False)
                 elif query['request_type'] == 'query':
                     batch = db.query(**parse_query(query), return_dataframe=False)
-                elif query['request_type'] == 'append_to_database':
+                elif query['request_type'] == 'new_batch':
                     connection.send(msg=db._get_tables_specs())
-                    db.append(query['files'], query['batch'], query['comment'], table_generator=connection.recv_tables())
-                    msg = 'Database created successfully!'
+                    db.new_batch(query['files'], query['batch'], query['comment'], table_generator=connection.recv_tables())
+                    msg = 'New batch created successfully!'
                 elif query['request_type'] == 'restore_database':
                     db.restore(query['batch'])
                     msg = f"Database restored to '{query['batch']}' state successfully!"
@@ -172,7 +171,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                     self.server.databases[query['path']] = get_database_hash(os.path.join(path, '##header.json'))
 
                 if query['request_type'] in ('header', 'create_database',
-                                             'append_to_database', 'restore_database',
+                                             'new_batch', 'restore_database',
                                              'add_attachment', 'remove_attachment'):
                     header = db.header.__dict__
                 else:
@@ -301,12 +300,12 @@ class DatabaseServer(socketserver.TCPServer):
                                           'sync_databases', 'recv_databases',
                                           'add_session', 'remove_session', 'list_sessions') or
                 query['request_type'] == 'create_database' and not self.current_session['create_allowed'] or
-                query['request_type'] in ('append_to_database', 'restore_database', 'remove_database',
+                query['request_type'] in ('new_batch', 'restore_database', 'remove_database',
                                           'add_attachment', 'remove_attachment') and
                 (not self.current_session['databases'] or query('path') not in self.current_session['databases'])):
                 raise PermissionError('Not enough privileges!')
 
-        if query['request_type'] in ('recv_databases', 'append_to_database', 'restore_database',
+        if query['request_type'] in ('recv_databases', 'new_batch', 'restore_database',
                                      'create_database', 'remove_database',
                                      'add_attachment', 'remove_attachment'):
             self.current_session['database_modified'] = True

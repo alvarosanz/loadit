@@ -76,7 +76,7 @@ class BaseClient(object):
                     data = connection.recv()
                     print(data['msg'])
 
-            elif kwargs['request_type'] in ('create_database', 'append_to_database'):
+            elif kwargs['request_type'] == 'new_batch':
                 connection.send_tables(kwargs['files'], data)
                 print(f"Assembling database ...")
                 data = connection.recv()
@@ -185,9 +185,9 @@ class DatabaseClient(BaseClient):
         """
         self._request(request_type='download_attachment', name=name, output_path=path)
 
-    def append(self, files, batch_name, comment=''):
+    def new_batch(self, files, batch_name, comment=''):
         """
-        Append new results to database. This operation is reversible.
+        Append new batch to database. This operation is reversible.
 
         Parameters
         ----------
@@ -198,7 +198,7 @@ class DatabaseClient(BaseClient):
         comment : str
             Batch comment.
         """
-        print(self._request(request_type='append_to_database', files=files,
+        print(self._request(request_type='new_batch', files=files,
                             batch=batch_name, comment=comment)['msg'])
 
     def restore(self, batch_name):
@@ -424,9 +424,8 @@ class Client(BaseClient):
         self.database = DatabaseClient(self.server_address, database,
                                        self._private_key, self._authentication)
 
-    def create_database(self, files, database, comment=''):
-        data = self._request(is_redirected=True, request_type='create_database',
-                             files=files, path=database, comment=comment)
+    def create_database(self, database):
+        data = self._request(is_redirected=True, request_type='create_database', path=database)
         print(data['msg'])
         self.database = DatabaseClient(self.server_address, database,
                                        self._private_key, self._authentication, data['header'])

@@ -10,10 +10,9 @@ Create a new database::
     import loadit
 
 
-    files = ['/Users/Alvaro/FEM_results/file01.pch', '/Users/Alvaro/FEM_results/file02.pch']
     database_path = '/Users/Alvaro/databases/FooDatabase'
 
-    database = loadit.create_database(files, database_path)
+    database = loadit.create_database(database_path)
 
 Load an existing database::
 
@@ -35,11 +34,23 @@ Append new result files to an existing database (this action is reversible)::
 
     files = ['/Users/Alvaro/FEM_results/file03.pch', '/Users/Alvaro/FEM_results/file04.pch']
     batch_name = 'new_batch'
-    database.append(files, batch_name)
+    database.new_batch(files, batch_name)
 
 Restore database to a previous state (this action is NOT reversible!)::
 
     database.restore('Initial batch')
+
+Add an attachment::
+
+    database.add_attachment('/Users/Alvaro/Desktop/nastran_model_input/BulkData.zip')
+
+Download an attachment::
+
+    database.download_attachment('BulkData.zip', '/Users/Alvaro/Desktop/nastran_model_input/')
+
+Remove an attachment::
+
+    database.remove_attachment('BulkData.zip')
 
 
 Using remote databases
@@ -72,7 +83,7 @@ Append new result files to an existing database (this action is reversible)::
 
     files = ['/Users/Alvaro/FEM_results/file03.pch', '/Users/Alvaro/FEM_results/file04.pch']
     batch_name = 'new_batch'
-    client.database.append(files, batch_name)
+    client.database.new_batch(files, batch_name)
 
 Restore database to a previous state (this action is NOT reversible!)::
 
@@ -96,10 +107,21 @@ Remove a session::
 
 Create a new database::
 
-    files = ['/Users/Alvaro/FEM_results/file01.pch', '/Users/Alvaro/FEM_results/file02.pch']
     database_path = 'FooDatabase'
 
-    client.create_database(files, database_path)
+    client.create_database(database_path)
+
+Add an attachment::
+
+    client.database.add_attachment('/Users/Alvaro/Desktop/nastran_model_input/BulkData.zip')
+
+Download an attachment::
+
+    client.database.download_attachment('BulkData.zip', '/Users/Alvaro/Desktop/nastran_model_input/')
+
+Remove an attachment::
+
+    client.database.remove_attachment('BulkData.zip')
 
 Remove a database::
 

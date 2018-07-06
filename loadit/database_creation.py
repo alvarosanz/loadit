@@ -128,7 +128,7 @@ def close_table(header):
         pass
 
 
-def assembly_database(database_path, headers, batches, max_chunk_size,
+def assembly_database(database_path, headers, batches, max_chunk_size=None,
                       hash_function='sha256', attachments=None):
 
     for name, header in headers.items():
@@ -218,7 +218,7 @@ def create_database_header(database_path, headers, batches, hash_function,
                 table_hashes[table] = hash_bytestr(f, get_hasher(hash_function))
 
     # Get hash of current batch
-    if batches[-1][1] is None:
+    if batches and batches[-1][1] is None:
         hasher = get_hasher(hash_function)
 
         for table_hash in table_hashes.values():
@@ -227,7 +227,7 @@ def create_database_header(database_path, headers, batches, hash_function,
         batches[-1][1] = hasher.hexdigest()
 
     # Set datetime of current batch
-    if batches[-1][2] is None:
+    if batches and batches[-1][2] is None:
         batches[-1][2] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
     # Write database header

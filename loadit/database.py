@@ -98,59 +98,62 @@ class DatabaseHeader(object):
         """
         info = list()
 
-        # General database info
+        # General info
         info.append(f"name: '{self.name}'")
         info.append(f'version: {self.version}')
         info.append(f'size: {humansize(self.nbytes)}'.format())
         info.append('')
 
-        if detailed:
-
-            # Tables info
-            for table in self.tables.values():
-                ncols = len(table['columns'])
-                info.append(f"table: '{table['name']}'")
-                info.append(f"{table['columns'][0][0]}s: {len(table['LIDs'])}")
-                info.append(f"{table['columns'][1][0]}s: {len(table['IDs'])}")
-                info.append('   ' + ' '.join(['_' * 6 for i in range(ncols)]))
-                info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
-                info.append('  |' + '|'.join([field.center(6) for field, _ in table['columns']]) + '|')
-                info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
-                info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
-                info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in table['columns']]) + '|')
-                info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
-
-                if table['query_functions']:
-                    info.append("\nother fields: {}".format(', '.join(table['query_functions'])))
-
-                if table['query_geometry']:
-                    info.append("geometry: {}".format(', '.join(table['query_geometry'])))
-
-                info.append('')
-        else:
-            info.append(f"{len(self.tables)} table/s:")
-
-            for table in self.tables:
-                info.append(f"    '{table}'")
-
-        # Restore points info
-        info.append('')
-        info.append('restore point/s:')
-
-        for i, (batch_name, batch_hash, batch_date, batch_files, batch_comment) in enumerate(self.batches):
-            info.append(f"{str(i).rjust(4)} - '{batch_name}': {batch_date} [{batch_hash}]")
+        # Tables info
+        if self.tables:
 
             if detailed:
 
-                if batch_comment:
-                    info.append(f'\n        {batch_comment}')
+                for table in self.tables.values():
+                    ncols = len(table['columns'])
+                    info.append(f"table: '{table['name']}'")
+                    info.append(f"{table['columns'][0][0]}s: {len(table['LIDs'])}")
+                    info.append(f"{table['columns'][1][0]}s: {len(table['IDs'])}")
+                    info.append('   ' + ' '.join(['_' * 6 for i in range(ncols)]))
+                    info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
+                    info.append('  |' + '|'.join([field.center(6) for field, _ in table['columns']]) + '|')
+                    info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
+                    info.append('  |' + '|'.join([' ' * 6 for i in range(ncols)]) + '|')
+                    info.append('  |' + '|'.join([dtype[1:].center(6) for _, dtype in table['columns']]) + '|')
+                    info.append('  |' + '|'.join(['_' * 6 for i in range(ncols)]) + '|')
 
-                info.append(f'\n        {len(batch_files)} file/s:')
+                    if table['query_functions']:
+                        info.append("\nother fields: {}".format(', '.join(table['query_functions'])))
 
-                for file in batch_files:
-                    info.append(f'          {file}')
+                    if table['query_geometry']:
+                        info.append("geometry: {}".format(', '.join(table['query_geometry'])))
 
-                info.append('')
+                    info.append('')
+            else:
+                info.append(f"{len(self.tables)} table/s:")
+
+                for table in self.tables:
+                    info.append(f"    '{table}'")
+
+        # Batches info
+        if self.batches:
+            info.append('')
+            info.append(f'{len(self.batches)} batches:')
+
+            for i, (batch_name, batch_hash, batch_date, batch_files, batch_comment) in enumerate(self.batches):
+                info.append(f"{str(i).rjust(4)} - '{batch_name}': {batch_date} [{batch_hash}]")
+
+                if detailed:
+
+                    if batch_comment:
+                        info.append(f'\n        {batch_comment}')
+
+                    info.append(f'\n        {len(batch_files)} file/s:')
+
+                    for file in batch_files:
+                        info.append(f'          {file}')
+
+                    info.append('')
 
         # Attachments info
         if self.attachments:
@@ -169,45 +172,22 @@ class DatabaseHeader(object):
             return info
 
 
-def create_database(files, database_path, comment='', tables_specs=None,
-                    overwrite=False, table_generator=None, max_memory=1e9):
+def create_database(database_path, overwrite=False):
     """
     Create a new database from .pch files.
 
     Parameters
     ----------
-    files : list of str
-        List of .pch files.
     database_path : str
         Database path.
-    comment : str
-        Batch comment.
-    tables_specs : dict, optional
-        Tables specifications. If not provided or None, default ones are used.
     overwrite : bool, optional
         Whether to rewrite or not an already existing database.
-    table_generator : generator, optional
-        A generator which yields tables.
-    max_memory : int, optional
-        Memory limit (in bytes).
     """
     Path(database_path).mkdir(parents=True, exist_ok=overwrite)
     (Path(database_path) / '.attachments').mkdir(exist_ok=overwrite)
-    print('Creating database ...')
-    database_path = database_path
-    batches = [['Initial batch', None, None, [os.path.basename(file) for file in files], comment]]
-
-    try:
-        headers = dict()
-        create_tables(database_path, files, headers, tables_specs,
-                      table_generator=table_generator)
-    except Exception as e: # Delete database if something unexpected happens
-        shutil.rmtree(database_path)
-        raise e
-
-    assembly_database(database_path, headers, batches, max_memory)
+    assembly_database(database_path, dict(), list())
     print('Database created successfully!')
-    database = Database(database_path, max_memory)
+    database = Database(database_path)
     database.load()
     return database
 
@@ -411,9 +391,9 @@ class Database(object):
         shutil.copyfile(os.path.join(self.path, '.attachments', name),
                         os.path.join(path, name))
 
-    def append(self, files, batch_name, comment='', table_generator=None):
+    def new_batch(self, files, batch_name, comment='', table_generator=None):
         """
-        Append new results to database. This operation is reversible.
+        Append new batch to database. This operation is reversible.
 
         Parameters
         ----------
@@ -430,7 +410,7 @@ class Database(object):
         if batch_name in {batch[0] for batch in self.header.batches}:
             raise ValueError(f"'{batch_name}' already exists!")
 
-        print('Appending to database ...')
+        print('Appending new batch ...')
 
         self._close()
 
@@ -451,7 +431,7 @@ class Database(object):
         assembly_database(self.path, self.header.tables, self.header.batches,
                           self.max_memory, self.header.hash_function, self.header.attachments)
         self.load()
-        print('Database updated successfully!')
+        print('New batch created successfully!')
 
     def restore(self, batch_name):
         """
