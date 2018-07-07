@@ -289,6 +289,10 @@ class DatabaseServer(socketserver.TCPServer):
         except PermissionError:
             connection.send(exception=error_msg)
             return False
+        except Exception:
+            self.handle_error(request, client_address)
+            return False
+
 
     def check_session(self, query):
         self.current_session['request_type'] = query['request_type']
