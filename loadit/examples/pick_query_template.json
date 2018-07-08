@@ -1,8 +1,6 @@
 {
-    "host": "192.168.0.154",
-    "port": 8080,
     "path": "new_foo",
-    "output_file": "",
+    "output_file": "/Users/Alvaro/Desktop/results.csv",
     "table": "ELEMENT FORCES - QUAD4 (33)",
     "fields": [
         "NX",

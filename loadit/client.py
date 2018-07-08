@@ -4,7 +4,7 @@ import json
 import jwt
 import time
 import pyarrow as pa
-from loadit.database import DatabaseHeader, parse_query_file, check_aggregation_options, is_abs
+from loadit.database import DatabaseHeader, Database, create_database, parse_query_file, check_aggregation_options, is_abs
 from loadit.connection import Connection, get_private_key
 from loadit.misc import get_hash
 
@@ -14,7 +14,7 @@ class BaseClient(object):
     Handles a remote connection.
     """
 
-    def authenticate(self, connection):
+    def authenticate(self, connection, user=None, password=None):
         """
         Authenticate with the server (using a JSON Web Token).
 
@@ -28,8 +28,15 @@ class BaseClient(object):
             connection.send_secret(json.dumps({'authentication': self._authentication.decode()}).encode())
         else:
             from loadit.__init__ import __version__
-            connection.send_secret(json.dumps({'user': input('user: '),
-                                               'password': getpass.getpass('password: '),
+
+            if not user:
+                user = input('user: ')
+
+            if not password:
+                password = getpass.getpass('password: ')
+
+            connection.send_secret(json.dumps({'user': user,
+                                               'password': password,
                                                'request': 'authentication',
                                                'version': __version__}).encode())
             self._authentication = connection.recv_secret()
@@ -44,7 +51,7 @@ class BaseClient(object):
 
         try:
             # Authentication
-            self.authenticate(connection)
+            self.authenticate(connection, user=kwargs.pop('user', None), password=kwargs.pop('password', None))
 
             # Sending request
 
@@ -78,7 +85,7 @@ class BaseClient(object):
 
             elif kwargs['request_type'] == 'new_batch':
                 connection.send_tables(kwargs['files'], data)
-                print(f"Assembling database ...")
+                print(f"Assembling database...")
                 data = connection.recv()
             elif kwargs['request_type'] == 'query':
                 print('Done!')
@@ -87,15 +94,13 @@ class BaseClient(object):
                 print('Done!')
                 data['batch'] = reader.read_next_batch()
             elif kwargs['request_type'] == 'add_attachment':
-                print(data['msg'], end=' ')
+                print(data['msg'])
                 connection.send_file(kwargs['file'])
                 data = connection.recv()
-                print('Done!')
             elif kwargs['request_type'] == 'download_attachment':
-                print(data['msg'], end=' ')
+                print(data['msg'])
                 connection.recv_file(os.path.join(kwargs['output_path'], kwargs['name']))
                 data = connection.recv()
-                print('Done!')
 
         finally:
             connection.kill()
@@ -136,6 +141,10 @@ class DatabaseClient(BaseClient):
         else:
             self._request(request_type='header')
 
+    @property
+    def read_only(self):
+        return not jwt.decode(self._authentication, verify=False)['is_admin']
+
     def _set_assertions(self):
         self._assertions = {name: {'fields': {field for field, _ in table['columns'][2:]},
                                    'query_functions': set(table['query_functions']),
@@ -159,7 +168,7 @@ class DatabaseClient(BaseClient):
         file : str
             Attachment file path.
         """
-        self._request(request_type='add_attachment', file=file)
+        print(self._request(request_type='add_attachment', file=file)['msg'])
 
     def remove_attachment(self, name):
         """
@@ -183,7 +192,7 @@ class DatabaseClient(BaseClient):
         path : str
             Output path.
         """
-        self._request(request_type='download_attachment', name=name, output_path=path)
+        print(self._request(request_type='download_attachment', name=name, output_path=path)['msg'])
 
     def new_batch(self, files, batch_name, comment=''):
         """
@@ -215,6 +224,7 @@ class DatabaseClient(BaseClient):
         if batch_name not in restore_points or batch_name == restore_points[-1]:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
+        print('Restoring database...')
         print(self._request(request_type='restore_database', batch=batch_name)['msg'])
 
     def query_from_file(self, file, double_precision=False, return_dataframe=True):
@@ -260,7 +270,7 @@ class DatabaseClient(BaseClient):
         """
         start = time.time()
         self._check_query(table, fields, LIDs, IDs, groups, geometry, weights)
-        print('Processing query ...', end=' ')
+        print('Processing query...', end=' ')
         batch = self._request(request_type='query', table=table, fields=fields,
                               LIDs=LIDs, IDs=IDs, groups=groups,
                               geometry=geometry, weights=weights,
@@ -273,7 +283,7 @@ class DatabaseClient(BaseClient):
             return batch
 
         if output_file:
-            print(f"Writing '{output_file}' ...", end=' ')
+            print(f"Writing '{output_file}'...", end=' ')
 
             with open(output_file, 'w') as f:
                 f.write(batch.schema.metadata[b'header'].decode() + '\n')
@@ -405,36 +415,48 @@ class Client(BaseClient):
     Handles a remote connection.
     """
 
-    def __init__(self, server_address):
-        self.server_address = server_address
-        self.database = None
+    def __init__(self):
+        self.server_address = None
         self._private_key = get_private_key()
         self._authentication = None
-        self._request(request_type='authentication')
-        print('Login successful!')
+
+    def connect(self, server_address, user=None, password=None):
+        host, port = server_address.split(':')
+        self.server_address = (host, int(port))
+        self._request(request_type='authentication', user=user, password=password)
+        print('Logged in')
 
     @property
     def session(self):
         return jwt.decode(self._authentication, verify=False)
 
     def info(self):
-        print(self._request(request_type='cluster_info')['msg'])
 
-    def load(self, database):
-        self.database = DatabaseClient(self.server_address, database,
-                                       self._private_key, self._authentication)
+        if self._authentication:
+            print(self._request(request_type='cluster_info')['msg'])
+        else:
+            print('Not connected!')
+
+    def load_database(self, database):
+        return Database(database)
+
+    def load_remote_database(self, database):
+        return DatabaseClient(self.server_address, database, self._private_key, self._authentication)
 
     def create_database(self, database):
+        return create_database(database)
+
+    def create_remote_database(self, database):
         data = self._request(is_redirected=True, request_type='create_database', path=database)
         print(data['msg'])
-        self.database = DatabaseClient(self.server_address, database,
-                                       self._private_key, self._authentication, data['header'])
+        return DatabaseClient(self.server_address, database,
+                              self._private_key, self._authentication, data['header'])
 
-    def remove_database(self, database):
+    def remove_remote_database(self, database):
         print(self._request(request_type='remove_database', path=database)['msg'])
 
     @property
-    def databases(self):
+    def remote_databases(self):
         return list(self._request(request_type='list_databases'))
 
     @property

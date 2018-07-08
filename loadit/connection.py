@@ -89,7 +89,7 @@ class Connection(object):
         ignored_tables = set()
 
         for i, file in enumerate(files):
-            print(f"Transferring file {i + 1} of {len(files)} ({humansize(os.path.getsize(file))}): '{os.path.basename(file)}' ...")
+            print(f"Transferring file {i + 1} of {len(files)} ({humansize(os.path.getsize(file))}): '{os.path.basename(file)}'...")
 
             for table in tables_in_pch(file, tables_specs):
 

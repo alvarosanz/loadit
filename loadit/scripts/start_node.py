@@ -7,10 +7,8 @@ import loadit
 if __name__ == '__main__':
     freeze_support()
     parser = argparse.ArgumentParser(description='Start node server', epilog='You will be asked to login as an admin')
-    parser.add_argument('host',
-                        help='IP address of the central server')
-    parser.add_argument('--port',
-                        help='port being used by the central server')
+    parser.add_argument('server_address',
+                        help='Server address of the central server (i.e. 192.168.0.154:8080)')
     parser.add_argument('--path', dest='root_path', metavar='ROOT_PATH', default=os.getcwd(),
                         help='folder containing the databases (by default is the current working directory)')
     parser.add_argument('--backup', dest='backup', action='store_const',
@@ -21,7 +19,5 @@ if __name__ == '__main__':
                         help='activate debug mode')
     args = parser.parse_args()
 
-    if not args.port:
-        args.port = loadit.server.SERVER_PORT
-
-    loadit.start_node((args.host, args.port), args.root_path, args.backup, args.debug)
+    host, port = args.server_address.split(':')
+    loadit.start_node((host, int(port)), args.root_path, args.backup, args.debug)

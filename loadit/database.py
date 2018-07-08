@@ -55,15 +55,19 @@ class DatabaseHeader(object):
                 with open(os.path.join(os.path.join(path, name), '#header.json')) as f:
                     self.tables[name] = json.load(f)
 
+                self.tables[name]['nbytes'] = 0
+
                 # Load LIDs & EIDs and calculate total size in bytes
                 for i, (field_name, dtype) in enumerate(self.tables[name]['columns']):
                     file = os.path.join(path, name, field_name + '.bin')
-                    self.nbytes += os.path.getsize(file)
+                    self.tables[name]['nbytes'] += os.path.getsize(file)
 
                     if i == 0:
                         self.tables[name]['LIDs'] = np.fromfile(file, dtype=dtype).tolist()
                     elif i == 1:
                         self.tables[name]['IDs'] = np.fromfile(file, dtype=dtype).tolist()
+
+                self.nbytes += self.tables[name]['nbytes']
 
                 # Load query functions
                 try:
@@ -171,6 +175,27 @@ class DatabaseHeader(object):
         else:
             return info
 
+    def get_batch_size(self, batch):
+        size = 0
+
+        for table in self.tables.values():
+            i_LID0 = 0
+
+            for batch_name, i_LID1, _ in table['batches']:
+
+                if batch_name == batch:
+                    n_LIDs = i_LID1 - i_LID0
+                    n_EIDs = len(table['IDs'])
+                    size += np.dtype(table['columns'][0][1]).itemsize * n_LIDs
+                    size += np.dtype(table['columns'][1][1]).itemsize * n_EIDs
+
+                    for field, dtype in table['columns'][2:]:
+                        size += np.dtype(dtype).itemsize * n_LIDs * n_EIDs * 2
+
+                    break
+
+        return size
+
 
 def create_database(database_path, overwrite=False):
     """
@@ -186,7 +211,7 @@ def create_database(database_path, overwrite=False):
     Path(database_path).mkdir(parents=True, exist_ok=overwrite)
     (Path(database_path) / '.attachments').mkdir(exist_ok=overwrite)
     assembly_database(database_path, dict(), list())
-    print('Database created successfully!')
+    print('Database created')
     database = Database(database_path)
     database.load()
     return database
@@ -355,6 +380,7 @@ class Database(object):
                                              os.path.getsize(attachment_file)]
 
         self._write_header()
+        print('Attachment added')
 
     def remove_attachment(self, name):
         """
@@ -372,6 +398,7 @@ class Database(object):
         os.remove(os.path.join(self.path, '.attachments', name))
         del self.header.attachments[name]
         self._write_header()
+        print('Attachment removed')
 
     def download_attachment(self, name, path):
         """
@@ -390,6 +417,7 @@ class Database(object):
 
         shutil.copyfile(os.path.join(self.path, '.attachments', name),
                         os.path.join(path, name))
+        print('Attachment downloaded')
 
     def new_batch(self, files, batch_name, comment='', table_generator=None):
         """
@@ -410,7 +438,7 @@ class Database(object):
         if batch_name in {batch[0] for batch in self.header.batches}:
             raise ValueError(f"'{batch_name}' already exists!")
 
-        print('Appending new batch ...')
+        print('Appending new batch...')
 
         self._close()
 
@@ -431,7 +459,7 @@ class Database(object):
         assembly_database(self.path, self.header.tables, self.header.batches,
                           self.max_memory, self.header.hash_function, self.header.attachments)
         self.load()
-        print('New batch created successfully!')
+        print('New batch created')
 
     def restore(self, batch_name):
         """
@@ -447,7 +475,7 @@ class Database(object):
         if batch_name not in restore_points:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
-        print(f"Restoring database to '{batch_name}' state ...")
+        print('Restoring database...')
         self._close()
         batch_index = 0
 
@@ -482,7 +510,7 @@ class Database(object):
         if self.header.batches[-1][1] != batch_hash_old:
             raise ValueError('Database header is corrupted!')
 
-        print(f"Database restored to '{batch_name}' state successfully!")
+        print('Database restored')
 
     def query_from_file(self, file, double_precision=False, return_dataframe=True):
         """
@@ -524,6 +552,7 @@ class Database(object):
             Data queried.
         """
         from loadit.queries import query_functions
+        print('Processing query...', end=' ')
 
         try:
             query_functions = query_functions[table]
@@ -680,12 +709,16 @@ class Database(object):
                     index = pd.Index(IDs_queried, name=index_names[0])
 
             df = pd.DataFrame(data, columns=columns, index=index, copy=False)
+            print('Done!')
 
             if output_file:
+                print(f"Writing '{output_file}'...", end=' ')
 
                 with open(output_file, 'w') as f:
                     f.write(json.dumps(self.header.get_query_header()) + '\n')
                     df.to_csv(f)
+
+                print('Done!')
 
             return df
         else:
@@ -714,6 +747,7 @@ class Database(object):
 
                 arrays += [pa.array(data[field]) for field in data]
 
+            print('Done!')
             return pa.RecordBatch.from_arrays(arrays, index_names + columns,
                                               metadata={b'index_columns': json.dumps(index_names).encode(),
                                                         b'header': json.dumps(self.header.get_query_header()).encode()})

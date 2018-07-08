@@ -57,15 +57,15 @@ class FieldData(object):
 
         Parameters
         ----------
-        LIDs : list of int or dict of int: [float, int, float, int, ...], optional
+        LIDs : list of int or dict of int: [float, int, float, int,...], optional
             List of requested LIDs. If not provided or None, all LIDs are considered.
             Alternatively, a dict with the LID combinations can be specified as
             follows (d letter stands for derived load case):
 
-                dLID0: [coeff0, LID0, coeff1, LID1, coeff2, LID2, ...]
-                dLID1: [coeff0, dLID0, coeff1, LID1, coeff2, LID2, ...]
+                dLID0: [coeff0, LID0, coeff1, LID1, coeff2, LID2,...]
+                dLID1: [coeff0, dLID0, coeff1, LID1, coeff2, LID2,...]
                 LID2: []
-                dLID3: [coeff0, dLID0, coeff1, dLID1, coeff2, LID2, ...]
+                dLID3: [coeff0, dLID0, coeff1, dLID1, coeff2, LID2,...]
 
         IDs : list of int, optional
             List of requested IDs. If not provided or None, all IDs are considered.

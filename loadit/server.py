@@ -52,15 +52,15 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
 
         # CLIENT REQUESTS
         elif query['request_type'] == 'authentication':
-            connection.send(msg={'msg': 'Login successfully!'})
+            connection.send(msg={'msg': 'Logged in'})
         elif query['request_type'] == 'shutdown':
 
             if query['node']:
                 self.server.shutdown_node(query['node'])
-                connection.send(msg={'msg': 'Node shutdown successfully!'})
+                connection.send(msg={'msg': 'Node shutdown'})
             else:
                 threading.Thread(target=self.server.shutdown).start()
-                connection.send(msg={'msg': 'Cluster shutdown successfully!'})
+                connection.send(msg={'msg': 'Cluster shutdown'})
 
         elif query['request_type'] == 'cluster_info':
             connection.send(msg={'msg': self.server.info(print_to_screen=False)})
@@ -69,10 +69,10 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
                                              is_admin=query['is_admin'],
                                              create_allowed=query['create_allowed'],
                                              databases=query['databases'])
-            connection.send(msg={'msg': "User '{}' added successfully!".format(query['user'])})
+            connection.send(msg={'msg': "User '{}' added".format(query['user'])})
         elif query['request_type'] == 'remove_session':
             self.server.sessions.remove_session(query['user'])
-            connection.send(msg={'msg': "User '{}' removed successfully!".format(query['user'])})
+            connection.send(msg={'msg': "User '{}' removed".format(query['user'])})
         elif query['request_type'] == 'list_sessions':
             connection.send(msg={'sessions': list(self.server.sessions.sessions.values())})
         elif query['request_type'] == 'sync_databases':
@@ -112,7 +112,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
             with self.server.database_lock.acquire(query['path']):
                 shutil.rmtree(os.path.join(self.server.root_path, query['path']))
 
-            connection.send(msg={'msg': "Database '{}' removed successfully!".format(query['path'])})
+            connection.send(msg={'msg': "Database '{}' removed".format(query['path'])})
             del self.server.databases[query['path']]
         else:
 
@@ -131,7 +131,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                         raise FileExistsError(f"Database already exists at '{query['path']}'!")
 
                     db = create_database(path)
-                    msg = 'Database created successfully!'
+                    msg = 'Database created'
                 else:
                     db = Database(path)
 
@@ -142,30 +142,32 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 elif query['request_type'] == 'new_batch':
                     connection.send(msg=db._get_tables_specs())
                     db.new_batch(query['files'], query['batch'], query['comment'], table_generator=connection.recv_tables())
-                    msg = 'New batch created successfully!'
+                    msg = 'New batch created'
                 elif query['request_type'] == 'restore_database':
                     db.restore(query['batch'])
-                    msg = f"Database restored to '{query['batch']}' state successfully!"
+                    msg = 'Database restored'
                 elif query['request_type'] == 'add_attachment':
 
                     if query['file'] in db.header.attachments:
                         raise FileExistsError(f"Already existing attachment!")
 
                     attachment_file = os.path.join(path, '.attachments', os.path.basename(query['file']))
-                    connection.send(msg={'msg': 'Transferring file ...'})
+                    connection.send(msg={'msg': 'Transferring file...'})
                     connection.recv_file(attachment_file)
                     db.add_attachment(attachment_file, copy=False)
+                    msg = 'Attachment added'
                 elif query['request_type'] == 'remove_attachment':
                     db.remove_attachment(query['name'])
-                    msg = 'Attachment removed successfully!'
+                    msg = 'Attachment removed'
                 elif query['request_type'] == 'download_attachment':
 
                     if query['name'] not in db.header.attachments:
                         raise FileNotFoundError(f"Attachment not found!")
 
                     attachment_file = os.path.join(path, '.attachments', query['name'])
-                    connection.send(msg={'msg': f"Downloading '{query['name']}' ({humansize(os.path.getsize(attachment_file))}) ..."})
+                    connection.send(msg={'msg': f"Downloading '{query['name']}' ({humansize(os.path.getsize(attachment_file))})..."})
                     connection.send_file(attachment_file)
+                    msg = 'Attachment downloaded'
 
                 if self.server.current_session['database_modified']:
                     self.server.databases[query['path']] = get_database_hash(os.path.join(path, '##header.json'))
@@ -181,7 +183,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
             try:
                 batch_message = get_batch_message(batch)
-                msg = f"Transferring query results ({humansize(len(batch_message))}) ..."
+                msg = f"Transferring query results ({humansize(len(batch_message))})..."
                 connection.send(msg={'msg': msg, 'header': header})
                 connection.send(batch_message)
             except NameError:
@@ -349,7 +351,7 @@ class CentralServer(DatabaseServer):
                       n_workers=cpu_count() - 1, debug=self._debug)
         print(f"Address: {self.server_address}")
         self.serve_forever()
-        print('Cluster shutdown successfully!')
+        print('Cluster shutdown')
 
     def shutdown(self):
 
@@ -601,7 +603,7 @@ class WorkerServer(DatabaseServer):
         for node, backup in nodes.items():
             worker = tuple(request(self.central, {'request_type': 'acquire_worker', 'node': node},
                                    master_key=self.master_key, private_key=self.private_key)[1]['worker_address'])
-            client_connection.send(msg={'msg': f"Syncing node '{node}' ..."})
+            client_connection.send(msg={'msg': f"Syncing node '{node}'..."})
 
             try:
                 connection = Connection(worker, private_key=self.private_key)
@@ -713,7 +715,7 @@ def start_node(central_address, root_path, backup=False, debug=False):
     for worker in workers:
         worker.join()
 
-    print('Node shutdown successfully!')
+    print('Node shutdown')
 
 
 def get_local_databases(root_path):
