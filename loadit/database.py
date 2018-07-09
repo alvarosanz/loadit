@@ -182,9 +182,10 @@ class DatabaseHeader(object):
             i_LID0 = 0
 
             for batch_name, i_LID1, _ in table['batches']:
+                n_LIDs = i_LID1 - i_LID0
+                i_LID0 += n_LIDs
 
                 if batch_name == batch:
-                    n_LIDs = i_LID1 - i_LID0
                     n_EIDs = len(table['IDs'])
                     size += np.dtype(table['columns'][0][1]).itemsize * n_LIDs
                     size += np.dtype(table['columns'][1][1]).itemsize * n_EIDs
@@ -193,6 +194,18 @@ class DatabaseHeader(object):
                         size += np.dtype(dtype).itemsize * n_LIDs * n_EIDs * 2
 
                     break
+
+        return size
+
+    def get_size(self, table, field=None):
+        n_LIDs = len(self.tables[table]['LIDs'])
+        n_EIDs = len(self.tables[table]['IDs'])
+        size = 0
+
+        for field_name, dtype in self.tables[table]['columns'][2:]:
+
+            if not field or field_name == field:
+                size += np.dtype(dtype).itemsize * n_LIDs * n_EIDs * 2
 
         return size
 

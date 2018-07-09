@@ -109,7 +109,7 @@ class App(object):
         self.statusbar.refresh('Database closed')
 
     def quit(self):
-        self.master.destroy()
+        self.root.destroy()
 
     def create_local_database(self):
 
@@ -272,6 +272,7 @@ class DatabaseFrame(ttk.Frame):
         self.tree.column('Size', stretch=False, width=90, minwidth=90, anchor='e')
         self.tree.heading('Size', text='Size', anchor='w')
         self.tree.bind('<Button-2>', self.show_tree_menu)
+        self.tree.bind('<Button-3>', self.show_tree_menu)
         self.update_tree()
 
         # Tree scrollbars
@@ -313,6 +314,7 @@ class DatabaseFrame(ttk.Frame):
 
             for field, _ in table['columns'][2:]:
                 self.tree.insert('tables::' + table['name'], 'end', 'tables::' + table['name'] + '::' + field, text=field)
+                self.tree.set('tables::' + table['name'] + '::' + field, 'Size', humansize(self.database.header.get_size(table['name'], field)))
 
             if table['query_functions']:
                 self.tree.insert('tables::' + table['name'], 'end', 'tables::' + table['name'] + '::others', text='Others')
