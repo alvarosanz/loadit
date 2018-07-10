@@ -451,8 +451,6 @@ class Database(object):
         if batch_name in {batch[0] for batch in self.header.batches}:
             raise ValueError(f"'{batch_name}' already exists!")
 
-        print('Appending new batch...')
-
         self._close()
 
         for header in self.header.tables.values():
@@ -468,6 +466,7 @@ class Database(object):
             self.restore(self.header.batches[-1][0])
             raise e
 
+        print('Assembling database...')
         self.header.batches.append([batch_name, None, None, [os.path.basename(file) for file in files], comment])
         assembly_database(self.path, self.header.tables, self.header.batches,
                           self.max_memory, self.header.hash_function, self.header.attachments)

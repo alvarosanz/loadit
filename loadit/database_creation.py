@@ -4,7 +4,7 @@ import datetime
 import numpy as np
 from loadit.read_results import tables_in_pch
 from loadit.tables_specs import get_tables_specs
-from loadit.misc import get_hasher, hash_bytestr
+from loadit.misc import get_hasher, hash_bytestr, humansize
 
 
 def create_tables(database_path, files, headers, tables_specs=None,
@@ -14,8 +14,16 @@ def create_tables(database_path, files, headers, tables_specs=None,
         tables_specs = get_tables_specs()
 
     if not table_generator:
-        table_generator = (table for file in files for table in
-                           tables_in_pch(file, tables_specs))
+
+        def table_generator(files, tables_specs):
+
+            for i, file in enumerate(files):
+                print(f"Processing file {i + 1} of {len(files)} ({humansize(os.path.getsize(file))}): '{os.path.basename(file)}'...")
+
+                for table in tables_in_pch(file, tables_specs):
+                    yield table
+
+        table_generator = table_generator(files, tables_specs)
 
     ignored_tables = set()
 
