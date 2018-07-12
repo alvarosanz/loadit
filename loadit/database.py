@@ -182,9 +182,10 @@ class DatabaseHeader(object):
             i_LID0 = 0
 
             for batch_name, i_LID1, _ in table['batches']:
+                n_LIDs = i_LID1 - i_LID0
+                i_LID0 += n_LIDs
 
                 if batch_name == batch:
-                    n_LIDs = i_LID1 - i_LID0
                     n_EIDs = len(table['IDs'])
                     size += np.dtype(table['columns'][0][1]).itemsize * n_LIDs
                     size += np.dtype(table['columns'][1][1]).itemsize * n_EIDs
@@ -193,6 +194,18 @@ class DatabaseHeader(object):
                         size += np.dtype(dtype).itemsize * n_LIDs * n_EIDs * 2
 
                     break
+
+        return size
+
+    def get_size(self, table, field=None):
+        n_LIDs = len(self.tables[table]['LIDs'])
+        n_EIDs = len(self.tables[table]['IDs'])
+        size = 0
+
+        for field_name, dtype in self.tables[table]['columns'][2:]:
+
+            if not field or field_name == field:
+                size += np.dtype(dtype).itemsize * n_LIDs * n_EIDs * 2
 
         return size
 
@@ -438,8 +451,6 @@ class Database(object):
         if batch_name in {batch[0] for batch in self.header.batches}:
             raise ValueError(f"'{batch_name}' already exists!")
 
-        print('Appending new batch...')
-
         self._close()
 
         for header in self.header.tables.values():
@@ -455,6 +466,7 @@ class Database(object):
             self.restore(self.header.batches[-1][0])
             raise e
 
+        print('Assembling database...')
         self.header.batches.append([batch_name, None, None, [os.path.basename(file) for file in files], comment])
         assembly_database(self.path, self.header.tables, self.header.batches,
                           self.max_memory, self.header.hash_function, self.header.attachments)
