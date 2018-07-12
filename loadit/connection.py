@@ -102,7 +102,7 @@ class Connection(object):
                     continue
 
                 f = BytesIO()
-                data = np.save(f, table.data)
+                np.save(f, table.data)
                 table.data = None
                 self.send(msg=table.__dict__)
                 self.send(bytes=f.getbuffer())

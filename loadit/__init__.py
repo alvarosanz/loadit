@@ -1,4 +1,4 @@
-from loadit.ui import App
+from loadit.gui.main import launch_app
 from loadit.client import Client
 from loadit.server import CentralServer, start_node
 
