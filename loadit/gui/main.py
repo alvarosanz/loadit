@@ -6,7 +6,6 @@ import wx.aui
 from loadit.client import Client
 from loadit.gui.statusbar import CustomStatusBar
 from loadit.gui.database_tab import DatabaseTab
-from loadit.misc import humansize
 
 
 class MainWindow(wx.Frame):
@@ -101,13 +100,13 @@ class MainWindow(wx.Frame):
             if session['is_admin']:
                 self.remotemenu_management.Enable(True)
 
-    def _new_tab(self, database, msg, is_local=True):
+    def _new_tab(self, func, database, msg, is_local=True):
 
         try:
-            tab = DatabaseTab(self.notebook, database, is_local)
-            self.notebook.AddPage(tab, os.path.basename(database.path))
+            tab = DatabaseTab(self.notebook, self, func(database), is_local)
+            self.notebook.AddPage(tab, os.path.basename(database))
             self.notebook.SetSelection(self.notebook.GetPageIndex(tab))
-            self.notebook.SetPageToolTip(self.notebook.GetPageIndex(tab), database.path)
+            self.notebook.SetPageToolTip(self.notebook.GetPageIndex(tab), database)
 
             if not is_local:
                 self.remote_tabs.append(tab)
@@ -117,27 +116,24 @@ class MainWindow(wx.Frame):
             self.statusbar.SetStatusText(str(e))
 
     def on_new(self, event):
-        dialog = wx.DirDialog(self, 'New database', '', style=wx.DD_DEFAULT_STYLE)
 
-        if dialog.ShowModal() == wx.ID_OK:
-            name_dialog = wx.TextEntryDialog(self, 'Name:','New database')
+        with wx.DirDialog(self, 'New database', '', style=wx.DD_DEFAULT_STYLE) as dialog:
 
-            if name_dialog.ShowModal() == wx.ID_OK:
-                database = os.path.join(dialog.GetPath(), name_dialog.GetValue())
-                self._new_tab(self.client.create_database(database), 'Database created', is_local=True)
+            if dialog.ShowModal() == wx.ID_OK:
 
-            name_dialog.Destroy()
+                with wx.TextEntryDialog(self, 'Name:','New database') as name_dialog:
 
-        dialog.Destroy()
+                    if name_dialog.ShowModal() == wx.ID_OK:
+                        database = os.path.join(dialog.GetPath(), name_dialog.GetValue())
+                        self._new_tab(self.client.create_database, database, 'Database created', is_local=True)
 
     def on_open(self, event):
-        dialog = wx.DirDialog(self, 'Open database', '', style=wx.DD_DEFAULT_STYLE)
 
-        if dialog.ShowModal() == wx.ID_OK:
-            database = dialog.GetPath()
-            self._new_tab(self.client.load_database(database), 'Database loaded', is_local=True)
+        with wx.DirDialog(self, 'Open database', '', style=wx.DD_DEFAULT_STYLE) as dialog:
 
-        dialog.Destroy()
+            if dialog.ShowModal() == wx.ID_OK:
+                database = dialog.GetPath()
+                self._new_tab(self.client.load_database, database, 'Database loaded', is_local=True)
 
     def on_close(self, event):
         tab = self.notebook.GetCurrentPage()
@@ -176,22 +172,20 @@ class MainWindow(wx.Frame):
         self.statusbar.update_status()
 
     def on_new_remote(self, event):
-        dialog = wx.TextEntryDialog(self, 'Name:','New database')
 
-        if dialog.ShowModal() == wx.ID_OK:
-            database = dialog.GetValue()
-            self._new_tab(self.client.create_remote_database(database), 'Database created', is_local=False)
+        with wx.TextEntryDialog(self, 'Name:','New database') as dialog:
 
-        dialog.Destroy()
+            if dialog.ShowModal() == wx.ID_OK:
+                database = dialog.GetValue()
+                self._new_tab(self.client.create_remote_database, database, 'Database created', is_local=False)
 
     def on_open_remote(self, event):
-        dialog = wx.SingleChoiceDialog(self, 'Database:', 'Open database', sorted(self.client.remote_databases))
+        
+        with wx.SingleChoiceDialog(self, 'Database:', 'Open database', sorted(self.client.remote_databases)) as dialog:
 
-        if dialog.ShowModal() == wx.ID_OK:
-            database = dialog.GetStringSelection()
-            self._new_tab(self.client.load_remote_database(database), 'Database loaded', is_local=False)
-
-        dialog.Destroy()
+            if dialog.ShowModal() == wx.ID_OK:
+                database = dialog.GetStringSelection()
+                self._new_tab(self.client.load_remote_database, database, 'Database loaded', is_local=False)
 
     def on_info(self, event):
         pass

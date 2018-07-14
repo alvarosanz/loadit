@@ -429,7 +429,7 @@ class Database(object):
             raise FileNotFoundError(f"Attachment not found!")
 
         shutil.copyfile(os.path.join(self.path, '.attachments', name),
-                        os.path.join(path, name))
+                        os.path.join(path))
         print('Attachment downloaded')
 
     def new_batch(self, files, batch_name, comment='', table_generator=None):
