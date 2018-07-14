@@ -5,6 +5,7 @@ import wx
 import wx.aui
 from loadit.client import Client
 from loadit.gui.statusbar import CustomStatusBar
+from loadit.gui.connect_dialog import ConnectDialog
 from loadit.gui.database_tab import DatabaseTab
 
 
@@ -151,15 +152,17 @@ class MainWindow(wx.Frame):
 
     def on_connect(self, event):
         server_address = '192.168.0.154:8080'
-        user = 'admin'
-        password = 'Fanegas08'
 
-        try:
-            self.statusbar.SetStatusText('Connecting...')
-            self.client.connect(server_address, user, password)
-            self.statusbar.update_status()
-        except Exception as e:
-            self.StatusBar.SetStatusText(str(e))
+        with ConnectDialog(self, server_address) as dialog:
+
+            if dialog.ShowModal() == wx.ID_OK:
+
+                try:
+                    self.statusbar.SetStatusText('Connecting...')
+                    self.client.connect(dialog.address, dialog.user, dialog.password)
+                    self.statusbar.update_status()
+                except Exception as e:
+                    self.StatusBar.SetStatusText(str(e))
 
     def on_disconnect(self, event):
         self.client._authentication = None
