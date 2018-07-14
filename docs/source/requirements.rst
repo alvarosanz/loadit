@@ -7,3 +7,4 @@ Requirements
 * pandas
 * cryptography
 * pyjwt
+* wxpython

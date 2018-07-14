@@ -2,21 +2,32 @@
 Quickstart
 **********
 
-Using local databases
-=====================
+Launch the database manager::
+
+    client = loadit.Client()
 
 Create a new database::
 
-    import loadit
-
-
-    database_path = '/Users/Alvaro/databases/FooDatabase'
-
-    database = loadit.create_database(database_path)
+    database = client.create_database('example_local_database')
 
 Load an existing database::
 
-    database = loadit.DataBase(database_path)
+    database = client.load_database('example_local_database')
+
+Connect to a remote server (you will be asked to login)::
+
+    client.connect('192.168.0.154:8080')
+
+Create a new remote database::
+
+    database = client.create_remote_database('example_remote_database')
+
+Load an existing remote database::
+
+    database = client.load_remote_database('example_remote_database')
+
+Database management
+-------------------
 
 Check database integrity::
 
@@ -46,86 +57,18 @@ Add an attachment::
 
 Download an attachment::
 
-    database.download_attachment('BulkData.zip', '/Users/Alvaro/Desktop/nastran_model_input/')
+    database.download_attachment('BulkData.zip', '/Users/Alvaro/Desktop/nastran_model_input/BulkData.zip'')
 
 Remove an attachment::
 
     database.remove_attachment('BulkData.zip')
 
+Cluster management
+------------------
 
-Using remote databases
-======================
-
-Open a new client interfacing the cluster (you will be asked to login)::
-
-    import loadit
-
-
-    client = loadit.Client(('192.168.0.154', 8080))
-
-Load a database::
-
-    client.load('FooDatabase')
-
-Display database info::
-
-    client.database.header.info()
-
-Check database integrity::
-
-    client.database.check()
-
-Perform a query::
-
-    dataframe = client.database.query_from_file(query_file)
-
-Append new result files to an existing database (this action is reversible)::
-
-    files = ['/Users/Alvaro/FEM_results/file03.pch', '/Users/Alvaro/FEM_results/file04.pch']
-    batch_name = 'new_batch'
-    client.database.new_batch(files, batch_name)
-
-Restore database to a previous state (this action is NOT reversible!)::
-
-    client.database.restore('Initial batch')
-
-Display cluster info::
+Show remote cluster info::
 
     client.info()
-
-List cluster sessions::
-
-    client.sessions()
-
-Add a new session::
-
-    client.add_session('jimmy_mcnulty', 'Im_the_boss', is_admin=True)
-
-Remove a session::
-
-    client.remove_session('jimmy_mcnulty')
-
-Create a new database::
-
-    database_path = 'FooDatabase'
-
-    client.create_database(database_path)
-
-Add an attachment::
-
-    client.database.add_attachment('/Users/Alvaro/Desktop/nastran_model_input/BulkData.zip')
-
-Download an attachment::
-
-    client.database.download_attachment('BulkData.zip', '/Users/Alvaro/Desktop/nastran_model_input/')
-
-Remove an attachment::
-
-    client.database.remove_attachment('BulkData.zip')
-
-Remove a database::
-
-    client.remove_database('FooDatabase')
 
 Sync databases between cluster nodes::
 
