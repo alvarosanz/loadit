@@ -546,7 +546,7 @@ class Database(object):
                           return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, weights=None, output_file=None,
+              geometry=None, output_file=None,
               double_precision=False, return_dataframe=True, **kwargs):
         """
         Perform a query.
@@ -578,6 +578,12 @@ class Database(object):
 
         if not fields:
             fields = self.tables[table].fields
+
+        # Weigths
+        if geometry and 'weights' in geometry:
+            weights = geometry['weights']
+        else:
+            weights = None
 
         # Group data pre-processing
         if groups:
@@ -1193,11 +1199,6 @@ def parse_query_file(file):
         query['geometry'] = {field: {int(row[0]): float(row[i + 1]) for row in rows} for i, field in
                              enumerate(rows[0][1:])}
 
-    if query['weights'] and isinstance(query['weights'], str):
-
-        with open(query['weights']) as f:
-            query['weights'] = {int(row[0]): float(row[1]) for row in csv.reader(f)}
-
     return parse_query(query)
 
 
@@ -1217,7 +1218,7 @@ def parse_query(query):
     query = {key: value if value else None for key, value in query.items()}
 
     # Convert string dict keys to int keys
-    for field in ('LIDs', 'geometry', 'weights'):
+    for field in ('LIDs', 'geometry'):
 
         try:
 

@@ -148,7 +148,7 @@ class DatabaseClient(BaseClient):
     def _set_assertions(self):
         self._assertions = {name: {'fields': {field for field, _ in table['columns'][2:]},
                                    'query_functions': set(table['query_functions']),
-                                   'query_geometry': set(table['query_geometry']),
+                                   'query_geometry': {'weigths'} | set(table['query_geometry']),
                                    'LIDs': set(table['LIDs']),
                                    'IDs': set(table['IDs'])} for name, table in
                             self.header.tables.items()}
@@ -245,13 +245,11 @@ class DatabaseClient(BaseClient):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
-        query = parse_query_file(file)
-        output_file = query.pop('output_file')
-        return self.query(**query, output_file=output_file,
+        return self.query(**parse_query_file(file),
                           double_precision=double_precision, return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, weights=None, output_file=None,
+              geometry=None, output_file=None,
               double_precision=False, return_dataframe=True, **kwargs):
         """
         Perform a query.
@@ -269,11 +267,11 @@ class DatabaseClient(BaseClient):
             Data queried.
         """
         start = time.time()
-        self._check_query(table, fields, LIDs, IDs, groups, geometry, weights)
+        self._check_query(table, fields, LIDs, IDs, groups, geometry)
         print('Processing query...', end=' ')
         batch = self._request(request_type='query', table=table, fields=fields,
                               LIDs=LIDs, IDs=IDs, groups=groups,
-                              geometry=geometry, weights=weights,
+                              geometry=geometry,
                               double_precision=double_precision)['batch']
 
         if return_dataframe:
@@ -294,7 +292,7 @@ class DatabaseClient(BaseClient):
         print('{:.1f} seconds'.format(time.time() - start))
         return df
 
-    def _check_query(self, table, fields, LIDs, IDs, groups, geometry, weights):
+    def _check_query(self, table, fields, LIDs, IDs, groups, geometry):
 
         # table checking
         if table not in self._assertions:
@@ -382,19 +380,6 @@ class DatabaseClient(BaseClient):
 
                     if not type(value) is float:
                         raise TypeError('Geometry value must be a float!')
-
-        # weights checking
-        if weights:
-            missing_IDs = {str(ID) for ID in IDs2read if ID not in weights}
-
-            if missing_IDs:
-                raise ValueError('Missing {}/s in weights inputs: {}'.format(self.header.tables[table]['columns'][1][0],
-                                                                            ', '.join(missing_IDs)))
-
-            for ID, value in weights.items():
-
-                if not type(value) is float:
-                    raise TypeError('weight value must be a float!')
 
     def _request(self, **kwargs):
         """
