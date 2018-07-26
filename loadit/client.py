@@ -4,7 +4,7 @@ import json
 import jwt
 import time
 import pyarrow as pa
-from loadit.database import DatabaseHeader, Database, create_database, parse_query_file, check_aggregation_options, is_abs
+from loadit.database import DatabaseHeader, Database, create_database, parse_query, check_aggregation_options, is_abs
 from loadit.connection import Connection, get_private_key
 from loadit.misc import get_hash
 
@@ -245,8 +245,10 @@ class DatabaseClient(BaseClient):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
-        return self.query(**parse_query_file(file),
-                          double_precision=double_precision, return_dataframe=return_dataframe)
+
+        with open(file) as f:
+            return self.query(**parse_query(json.load(f), True),
+                              double_precision=double_precision, return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
               geometry=None, output_file=None,

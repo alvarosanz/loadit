@@ -542,8 +542,10 @@ class Database(object):
         pandas.DataFrame or pyarrow.RecordBatch
             Data queried.
         """
-        return self.query(**parse_query_file(file), double_precision=double_precision,
-                          return_dataframe=return_dataframe)
+
+        with open(file) as f:
+            return self.query(**parse_query(json.load(f), True), double_precision=double_precision,
+                              return_dataframe=return_dataframe)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
               geometry=None, output_file=None,
@@ -1148,61 +1150,7 @@ def truncate_file(file, offset):
         f.truncate()
 
 
-def parse_query_file(file):
-    """
-    Parse query file.
-
-    Parameters
-    ----------
-    file : str
-        Query file path.
-
-    Returns
-    -------
-    dict
-        Parsed query.
-    """
-
-    with open(file) as f:
-        query = json.load(f)
-
-    if query['LIDs'] and isinstance(query['LIDs'], str):
-
-        with open(query['LIDs']) as f:
-            rows = list(csv.reader(f))
-
-        if any(len(row) > 1 for row in rows):
-            query['LIDs'] = {int(row[0]): [int(value) if i % 2 else float(value) for
-                                           i, value in enumerate(row[1:])] for row in rows}
-        else:
-            query['LIDs'] = [int(row[0]) for row in rows]
-
-    if query['IDs'] and isinstance(query['IDs'], str):
-
-        with open(query['IDs']) as f:
-            rows = list(csv.reader(f))
-
-        query['IDs'] = [int(row[0]) for row in rows]
-
-    if query['groups'] and isinstance(query['groups'], str):
-
-        with open(query['groups']) as f:
-            rows = list(csv.reader(f))
-
-        query['groups'] = {row[0]: [int(ID) for ID in row[1:]] for row in rows}
-
-    if query['geometry'] and isinstance(query['geometry'], str):
-
-        with open(query['geometry']) as f:
-            rows = list(csv.reader(f))
-
-        query['geometry'] = {field: {int(row[0]): float(row[i + 1]) for row in rows} for i, field in
-                             enumerate(rows[0][1:])}
-
-    return parse_query(query)
-
-
-def parse_query(query):
+def parse_query(query, parse_files=False):
     """
     Parse query dict.
 
@@ -1210,11 +1158,50 @@ def parse_query(query):
     ----------
     query : dict
         Un-parsed query.
+    parse_files : bool
+        Parse additional param files (only when processing a query for the first time).
+
     Returns
     -------
     dict
         Parsed query.
     """
+
+    if parse_files:
+
+        if query['LIDs'] and isinstance(query['LIDs'], str):
+
+            with open(query['LIDs']) as f:
+                rows = list(csv.reader(f))
+
+            if any(len(row) > 1 for row in rows):
+                query['LIDs'] = {int(row[0]): [int(value) if i % 2 else float(value) for
+                                            i, value in enumerate(row[1:])] for row in rows}
+            else:
+                query['LIDs'] = [int(row[0]) for row in rows]
+
+        if query['IDs'] and isinstance(query['IDs'], str):
+
+            with open(query['IDs']) as f:
+                rows = list(csv.reader(f))
+
+            query['IDs'] = [int(row[0]) for row in rows]
+
+        if query['groups'] and isinstance(query['groups'], str):
+
+            with open(query['groups']) as f:
+                rows = list(csv.reader(f))
+
+            query['groups'] = {row[0]: [int(ID) for ID in row[1:]] for row in rows}
+
+        if query['geometry'] and isinstance(query['geometry'], str):
+
+            with open(query['geometry']) as f:
+                rows = list(csv.reader(f))
+
+            query['geometry'] = {field: {int(row[0]): float(row[i + 1]) for row in rows} for i, field in
+                                enumerate(rows[0][1:])}
+
     query = {key: value if value else None for key, value in query.items()}
 
     # Convert string dict keys to int keys
