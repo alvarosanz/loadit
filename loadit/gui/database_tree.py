@@ -98,6 +98,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                         try:
                             self.database.new_batch(dialog.GetPaths(), name_dialog.GetValue())
                             self.update()
+                            self.parent.update()
                         except Exception as e:
                             self.root.statusbar.SetStatusText(str(e))
 
@@ -114,6 +115,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                 try:
                     self.database.restore(batch)
                     self.update()
+                    self.parent.update()
                 except Exception as e:
                     self.root.statusbar.SetStatusText(str(e))
 

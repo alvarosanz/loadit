@@ -12,7 +12,9 @@ from loadit.gui.database_tab import DatabaseTab
 class MainWindow(wx.Frame):
 
     def __init__(self, parent, title):
-        super().__init__(parent, title=title, size=(1024, 640))
+        size = (1080, 720)
+        super().__init__(parent, title=title, size=size)
+        self.SetMinSize(size)
         self.client = Client()
 
         # Statusbar
@@ -31,12 +33,9 @@ class MainWindow(wx.Frame):
         self.filemenu_new = self.filemenu.Append(wx.ID_ANY, 'New', 'Create a new database')
         self.filemenu_open= self.filemenu.Append(wx.ID_ANY, 'Open', 'Open an existing database')
         self.filemenu.AppendSeparator()
-        self.filemenu_close= self.filemenu.Append(wx.ID_ANY, 'Close', 'Close current database')
-        self.filemenu.AppendSeparator()
         self.filemenu_exit = self.filemenu.Append(wx.ID_EXIT, 'Exit', 'Exit the program')
         self.Bind(wx.EVT_MENU, self.on_new, self.filemenu_new)
         self.Bind(wx.EVT_MENU, self.on_open, self.filemenu_open)
-        self.Bind(wx.EVT_MENU, self.on_close, self.filemenu_close)
 
         # Remote menu
         self.remotemenu = wx.Menu()
@@ -75,12 +74,6 @@ class MainWindow(wx.Frame):
         self.Show()
 
     def update_menubar(self, event):
-        # File Menu
-        if self.notebook.GetPageCount():
-            self.filemenu_close.Enable(True)
-        else:
-            self.filemenu_close.Enable(False)
-
         # Remote menu
         self.remotemenu_connect.Enable(True)
         self.remotemenu_disconnect.Enable(False)
@@ -136,24 +129,18 @@ class MainWindow(wx.Frame):
                 database = dialog.GetPath()
                 self._new_tab(self.client.load_database, database, 'Database loaded', is_local=True)
 
-    def on_close(self, event):
-        tab = self.notebook.GetCurrentPage()
-        self.notebook.DeletePage(self.notebook.GetPageIndex(tab))
+    def on_tab_close(self, event):
 
         try:
-            self.remote_tabs.remove(tab)
+            self.remote_tabs.remove(self.notebook.GetCurrentPage())
         except ValueError:
             pass
 
         self.statusbar.SetStatusText('Database closed')
 
-    def on_tab_close(self, event):
-        self.remote_tabs.remove(self.notebook.GetCurrentPage())
-
     def on_connect(self, event):
-        server_address = '192.168.0.154:8080'
 
-        with ConnectDialog(self, server_address) as dialog:
+        with ConnectDialog(self) as dialog:
 
             if dialog.ShowModal() == wx.ID_OK:
 
