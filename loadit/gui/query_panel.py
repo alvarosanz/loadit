@@ -55,7 +55,7 @@ class QueryPanel(wx.Panel):
         self.LIDs_notebook = wx.Notebook(self)
         self.critical_LIDs = False
 
-        # Simple LIDs tab
+        # By LIDs tab
         panel = wx.Panel(self.LIDs_notebook, id=wx.ID_ANY)
         panel_sizer = wx.BoxSizer(wx.VERTICAL)
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -68,9 +68,9 @@ class QueryPanel(wx.Panel):
         self._critical_LIDs.Bind(wx.EVT_CHECKBOX, self.update_critical_LIDs)
         panel_sizer.Add(self._critical_LIDs, 0, wx.ALL + wx.EXPAND, 5)
         panel.SetSizer(panel_sizer)
-        self.LIDs_notebook.AddPage(panel, 'Simple LIDs')
+        self.LIDs_notebook.AddPage(panel, 'By LIDs')
 
-        # Combined LIDs tab
+        # By Combinations tab
         panel = wx.Panel(self.LIDs_notebook, id=wx.ID_ANY)
         panel_sizer = wx.BoxSizer(wx.VERTICAL)
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -85,13 +85,14 @@ class QueryPanel(wx.Panel):
         self._critical_LIDs2.Bind(wx.EVT_CHECKBOX, self.update_critical_LIDs)
         panel_sizer.Add(self._critical_LIDs2, 0, wx.ALL + wx.EXPAND, 5)
         panel.SetSizer(panel_sizer)
-        self.LIDs_notebook.AddPage(panel, 'Combined LIDs')
+        self.LIDs_notebook.AddPage(panel, 'By Combinations')
         self.LIDs_notebook.ChangeSelection(0)
         sizer.Add(self.LIDs_notebook, 0, wx.ALL + wx.EXPAND, 5)
 
         # Fields
         fields_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self._fields = list()
+        self._fields = dict()
+        self.last_used_field = None
 
         for column in range(2):
             fields_column_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -99,12 +100,13 @@ class QueryPanel(wx.Panel):
             for rows in range(5):
                 field_sizer = wx.BoxSizer(wx.HORIZONTAL)
                 field_sizer.Add(wx.StaticText(self, label=f'Field {len(self._fields)}:'), 0, wx.ALL + wx.ALIGN_RIGHT, 5)
-                fields = wx.Choice(self, size=(125, -1))
-                field_sizer.Add(fields, 0, wx.ALL + wx.EXPAND, 1)
+                field = wx.Choice(self, size=(125, -1))
+                field.Bind(wx.EVT_CHOICE, self.update_fields)
+                field_sizer.Add(field, 0, wx.ALL + wx.EXPAND, 1)
                 aggregations = wx.Choice(self, size=(125, -1), choices=[])
                 field_sizer.Add(aggregations, 0, wx.ALL + wx.EXPAND, 1)
                 fields_column_sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 1)
-                self._fields.append([fields, aggregations])
+                self._fields[field] = aggregations
             
             fields_sizer.Add(fields_column_sizer, 0, wx.LEFT + wx.RIGHT + wx.EXPAND, 10)
 
@@ -173,36 +175,56 @@ class QueryPanel(wx.Panel):
                 ID_tab_selection = event.GetSelection()
             else:
                 ID_tab_selection = self.IDs_notebook.GetSelection()
+
+            if event and event.GetEventObject() in self._fields:
+                field = event.GetEventObject()
+                aggregation = self._fields[field]
+
+                if field.GetString(field.GetSelection()) == '':
+                    self.set_field(field, aggregation, ID_tab_selection == 0, [''] + fields, False)
+                else:
+                    self.set_field(field, aggregation, ID_tab_selection == 0, [''] + fields, True)
+
+            else:
         
-            for field, aggregation in self._fields:
-                field.SetItems([''] + fields)
-                field.SetSelection(0)
-                aggregation.Enabled = True
-
-                if ID_tab_selection == 0: # By ID
-
-                    if not self.critical_LIDs: # All LIDs
-                        aggregation.SetItems([''])
-                        aggregation.SetSelection(0)
-                        aggregation.Enabled = False
-                    else: # Critical LID
-                        aggregation.SetItems(['', 'MAX', 'MIN'])
-                        aggregation.SetSelection(0)
-
-                else: # By group
-
-                    if not self.critical_LIDs: # All LIDs
-                        aggregation.SetItems(['', 'AVG', 'ABS(AVG)', 'MAX', 'MIN'])
-                        aggregation.SetSelection(0)
-                    else: # Critical LID
-                        aggregation.SetItems(['', 'AVG-MAX', 'ABS(AVG)-MAX', 'AVG-MIN', 'MAX-MAX', 'MIN-MIN'])
-                        aggregation.SetSelection(0)
+                for field, aggregation in self._fields.items():
+                    self.set_field(field, aggregation, ID_tab_selection == 0, [''] + fields, False)
                 
         else:
             self.Enabled = False
             
         if event:
             event.Skip()
+
+    def set_field(self, field, aggregation, by_id, fields, activate_agreggation):
+
+        if not activate_agreggation:
+            field.SetItems(fields)
+            field.SetSelection(0)
+            field.Enabled = True
+            aggregation.SetItems([''])
+            aggregation.Enabled = False
+        else:
+            aggregation.Enabled = True
+
+            if by_id: # By ID
+
+                if not self.critical_LIDs: # All LIDs
+                    aggregation.SetItems([''])
+                    aggregation.SetSelection(0)
+                    aggregation.Enabled = False
+                else: # Critical LID
+                    aggregation.SetItems(['MAX', 'MIN'])
+                    aggregation.SetSelection(0)
+
+            else: # By group
+                
+                if not self.critical_LIDs: # All LIDs
+                    aggregation.SetItems(['AVG', 'ABS(AVG)', 'MAX', 'MIN'])
+                    aggregation.SetSelection(0)
+                else: # Critical LID
+                    aggregation.SetItems(['AVG-MAX', 'ABS(AVG)-MAX', 'AVG-MIN', 'MAX-MAX', 'MIN-MIN'])
+                    aggregation.SetSelection(0)
 
     def update_critical_LIDs(self, event):
         self.critical_LIDs = event.GetEventObject().IsChecked()
