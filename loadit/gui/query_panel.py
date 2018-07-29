@@ -287,7 +287,7 @@ class QueryPanel(wx.Panel):
         query['table'] = self._table.GetString(self._table.GetSelection())
         query['fields'] = list()
 
-        for field, aggregation in self._fields:
+        for field, aggregation in self._fields.items():
             field_value = field.GetString(field.GetSelection())
             
             if field_value:

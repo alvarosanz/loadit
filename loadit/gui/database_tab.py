@@ -1,6 +1,7 @@
 import wx
 from loadit.gui.database_tree import DatabaseTree
 from loadit.gui.query_panel import QueryPanel
+from loadit.gui.multiple_query_panel import MultipleQueryPanel
 
 
 class DatabaseTab(wx.Panel):
@@ -19,7 +20,7 @@ class DatabaseTab(wx.Panel):
 
         self.single_query_panel = QueryPanel(notebook, self.root, self.database)
         notebook.AddPage(self.single_query_panel, 'Single Query')
-        self.multiple_query_panel = wx.Panel(notebook, wx.ID_ANY)
+        self.multiple_query_panel = MultipleQueryPanel(notebook, self.root, self.database)
         notebook.AddPage(self.multiple_query_panel, 'Multiple Query')
         notebook.ChangeSelection(0)
 
@@ -28,4 +29,4 @@ class DatabaseTab(wx.Panel):
 
     def update(self):
         self.single_query_panel.update()
-        # self.multiple_query_panel.update()
+        self.multiple_query_panel.update()
