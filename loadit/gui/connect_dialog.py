@@ -7,7 +7,7 @@ class ConnectDialog(wx.Dialog):
         super().__init__(parent)
         self.SetTitle('Connect')
         self.SetSize((280, 200))
-        self._address = wx.TextCtrl(self, value=address)
+        self._address = wx.TextCtrl(self, value=address if address else '')
         self._user = wx.TextCtrl(self)
         self._password = wx.TextCtrl(self, style=wx.TE_PASSWORD)
         self.InitUI()
