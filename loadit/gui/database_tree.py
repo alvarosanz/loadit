@@ -2,6 +2,7 @@ import wx
 import os
 import wx.lib.agw.hypertreelist
 from loadit.misc import humansize
+from loadit.gui.new_batch_dialog import NewBatchDialog
 
 
 class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
@@ -86,21 +87,16 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
 
     def new_batch(self, event):
 
-        with wx.FileDialog(self.root, 'New batch', wildcard='PCH files (*.pch)|*.pch',
-                           style=wx.FD_OPEN | wx.FD_MULTIPLE) as dialog:
+        with NewBatchDialog(self.root) as dialog:
         
             if dialog.ShowModal() == wx.ID_OK:
 
-                with wx.TextEntryDialog(self.root, 'Name:','New batch') as name_dialog:
-
-                    if name_dialog.ShowModal() == wx.ID_OK:
-
-                        try:
-                            self.database.new_batch(dialog.GetPaths(), name_dialog.GetValue())
-                            self.update()
-                            self.parent.update()
-                        except Exception as e:
-                            self.root.statusbar.SetStatusText(str(e))
+                try:
+                    self.database.new_batch(dialog.files, dialog.name, dialog.comment)
+                    self.update()
+                    self.parent.update()
+                except Exception as e:
+                    self.root.statusbar.SetStatusText(str(e))
 
     def restore(self, event):
         batch = self.GetSelection().GetText()
