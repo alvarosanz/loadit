@@ -227,7 +227,7 @@ class DatabaseClient(BaseClient):
         print('Restoring database...')
         print(self._request(request_type='restore_database', batch=batch_name)['msg'])
 
-    def query_from_file(self, file, double_precision=False, return_dataframe=True):
+    def query_from_file(self, file, double_precision=False):
         """
         Perform a query from a file.
 
@@ -237,22 +237,18 @@ class DatabaseClient(BaseClient):
             Query file.
         double_precision : bool, optional
             Whether to use single or double precision. By default single precision is used.
-        return_dataframe : bool, optional
-            Whether to return a pandas dataframe or a pyarrow RecordBatch.
 
         Returns
         -------
-        pandas.DataFrame or pyarrow.RecordBatch
+        pyarrow.RecordBatch
             Data queried.
         """
 
         with open(file) as f:
-            return self.query(**parse_query(json.load(f), True),
-                              double_precision=double_precision, return_dataframe=return_dataframe)
+            return self.query(**parse_query(json.load(f), True), double_precision=double_precision)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, output_file=None,
-              double_precision=False, return_dataframe=True, **kwargs):
+              geometry=None, double_precision=False, **kwargs):
         """
         Perform a query.
 
@@ -260,39 +256,18 @@ class DatabaseClient(BaseClient):
         ----------
         double_precision : bool, optional
             Whether to use single or double precision. By default single precision is used.
-        return_dataframe : bool, optional
-            Whether to return a pandas dataframe or a pyarrow RecordBatch.
 
         Returns
         -------
-        pandas.DataFrame or pyarrow.RecordBatch
+        pyarrow.RecordBatch
             Data queried.
         """
-        start = time.time()
         self._check_query(table, fields, LIDs, IDs, groups, geometry)
         print('Processing query...', end=' ')
-        batch = self._request(request_type='query', table=table, fields=fields,
-                              LIDs=LIDs, IDs=IDs, groups=groups,
-                              geometry=geometry,
-                              double_precision=double_precision)['batch']
-
-        if return_dataframe:
-            df = batch.to_pandas()
-            df.set_index(json.loads(batch.schema.metadata[b'index_columns'].decode()), inplace=True)
-        else:
-            return batch
-
-        if output_file:
-            print(f"Writing '{output_file}'...", end=' ')
-
-            with open(output_file, 'w') as f:
-                f.write(batch.schema.metadata[b'header'].decode() + '\n')
-                df.to_csv(f)
-
-            print('Done!')
-
-        print('{:.1f} seconds'.format(time.time() - start))
-        return df
+        return self._request(request_type='query', table=table, fields=fields,
+                             LIDs=LIDs, IDs=IDs, groups=groups,
+                             geometry=geometry,
+                             double_precision=double_precision)['batch']
 
     def _check_query(self, table, fields, LIDs, IDs, groups, geometry):
 

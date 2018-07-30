@@ -1,7 +1,7 @@
 import wx
 import re
 import json
-from loadit.database import parse_query
+from loadit.database import parse_query, write_query
 
 
 class QueryPanel(wx.Panel):
@@ -134,6 +134,7 @@ class QueryPanel(wx.Panel):
         field_sizer.Add(button, 0, wx.LEFT + wx.EXPAND, 5)
         field_sizer.Add(wx.StaticText(self, label='Type:'), 0, wx.LEFT + wx.ALIGN_RIGHT, 25)
         self._output_type = wx.Choice(self, choices=['csv', 'parquet'], size=(80, -1))
+        self._output_type.Bind(wx.EVT_CHOICE, self.on_output_type_change)
         field_sizer.Add(self._output_type, 0, wx.LEFT + wx.EXPAND, 5)
         sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 5)
         sizer.Add(-1, 8)
@@ -232,6 +233,9 @@ class QueryPanel(wx.Panel):
         self._critical_LIDs.SetValue(self.critical_LIDs)
         self._critical_LIDs2.SetValue(self.critical_LIDs)
         self.update_fields(None)
+    
+    def on_output_type_change(self, event):
+        self._output_file.Value = ''
 
     def select_groups_file(self, event):
 
@@ -279,7 +283,8 @@ class QueryPanel(wx.Panel):
                 self.root.statusbar.SetStatusText('Query saved')
 
     def do_query(self, event):
-        self.database.query(**parse_query(self.get_query(), True))
+        query = self.get_query()
+        write_query(self.database.query(**parse_query(query, True)), query['output_file'])
 
     def get_query(self):
         query = dict()

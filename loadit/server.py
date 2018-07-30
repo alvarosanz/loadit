@@ -138,7 +138,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 if query['request_type'] == 'check':
                     msg = db.check(print_to_screen=False)
                 elif query['request_type'] == 'query':
-                    batch = db.query(**parse_query(query), return_dataframe=False)
+                    batch = db.query(**parse_query(query))
                 elif query['request_type'] == 'new_batch':
                     connection.send(msg=db._get_tables_specs())
                     db.new_batch(query['files'], query['batch'], query['comment'], table_generator=connection.recv_tables())

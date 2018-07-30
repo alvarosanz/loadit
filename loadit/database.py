@@ -7,6 +7,7 @@ import binascii
 import shutil
 import numpy as np
 import pyarrow as pa
+import pyarrow.parquet as pq
 from loadit.table_data import TableData
 from loadit.tables_specs import get_tables_specs
 from loadit.database_creation import create_tables, assembly_database, open_table, create_database_header
@@ -524,7 +525,7 @@ class Database(object):
 
         print('Database restored')
 
-    def query_from_file(self, file, double_precision=False, return_dataframe=True):
+    def query_from_file(self, file, double_precision=False):
         """
         Perform a query from a file.
 
@@ -534,22 +535,25 @@ class Database(object):
             Query file.
         double_precision : bool, optional
             Whether to use single or double precision. By default single precision is used.
-        return_dataframe : bool, optional
-            Whether to return a pandas dataframe or a pyarrow RecordBatch.
 
         Returns
         -------
-        pandas.DataFrame or pyarrow.RecordBatch
+        pyarrow.RecordBatch
             Data queried.
         """
 
         with open(file) as f:
-            return self.query(**parse_query(json.load(f), True), double_precision=double_precision,
-                              return_dataframe=return_dataframe)
+            query = parse_query(json.load(f), True)
+            
+        record_batch =  self.query(**query, double_precision=double_precision)
+
+        if query['output_file']:
+            write_query(record_batch, query['output_file'])
+
+        return record_batch
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, output_file=None,
-              double_precision=False, return_dataframe=True, **kwargs):
+              geometry=None, double_precision=False, **kwargs):
         """
         Perform a query.
 
@@ -557,12 +561,10 @@ class Database(object):
         ----------
         double_precision : bool, optional
             Whether to use single or double precision. By default single precision is used.
-        return_dataframe : bool, optional
-            Whether to return a pandas dataframe or a pyarrow RecordBatch.
 
         Returns
         -------
-        pandas.DataFrame or pyarrow.RecordBatch
+        pyarrow.RecordBatch
             Data queried.
         """
         from loadit.queries import query_functions
@@ -699,78 +701,46 @@ class Database(object):
         LIDs_queried = np.array(LIDs_queried, dtype=np.int64)
         IDs_queried = np.array(IDs_queried, dtype=np.int64)
 
-        # DataFrame creation
+        # RecordBatch creation
+        from loadit.queries import set_index
+
         if mem_handler.level == 0:
             index_names = [self.header.tables[table]['columns'][0][0],
                            self.header.tables[table]['columns'][1][0]]
             columns = mem_handler.fields[0]
             data = mem_handler.data0.reshape((len(fields), len(LIDs_queried) * len(IDs_queried))).T
+            index0 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
+            index1 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
+            set_index(LIDs_queried, IDs_queried, index0, index1)
+            arrays = [pa.array(index0.ravel()), pa.array(index1.ravel())]
+            arrays += [pa.array(data[:, i]) for i in range(len(fields))]
         elif mem_handler.level == 1:
             index_names = [self.header.tables[table]['columns'][0][0], 'Group']
             columns = mem_handler.fields[1]
             data = mem_handler.data1.reshape((len(fields), len(LIDs_queried) * len(groups))).T
+            index0 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
+            index1 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
+            set_index(LIDs_queried, np.arange(len(groups), dtype=np.int64), index0, index1)
+            arrays = [pa.array(index0.ravel()),
+                        pa.DictionaryArray.from_arrays(pa.array(index1.ravel()), pa.array(list(groups)))]
+            arrays += [pa.array(data[:, i]) for i in range(len(fields))]
         else:
             index_names = ['Group'] if groups else [self.header.tables[table]['columns'][1][0]]
             columns = [field + suffix for field in mem_handler.fields[2] for suffix in ('', LID_suffix)]
             data = {field: mem_handler.get(field).ravel() for field in columns}
 
-        if return_dataframe:
-            import pandas as pd
-
-            if mem_handler.level == 0:
-                index = pd.MultiIndex.from_product([LIDs_queried, IDs_queried], names=index_names)
-            elif mem_handler.level == 1:
-                index = pd.MultiIndex.from_product([LIDs_queried, list(groups)], names=index_names)
+            if groups:
+                index = np.arange(len(groups), dtype=np.int64)
+                arrays = [pa.DictionaryArray.from_arrays(pa.array(index), pa.array(list(groups)))]
             else:
+                arrays = [pa.array(IDs_queried)]
 
-                if groups:
-                    index = pd.Index(list(groups), name=index_names[0])
-                else:
-                    index = pd.Index(IDs_queried, name=index_names[0])
+            arrays += [pa.array(data[field]) for field in data]
 
-            df = pd.DataFrame(data, columns=columns, index=index, copy=False)
-            print('Done!')
-
-            if output_file:
-                print(f"Writing '{output_file}'...", end=' ')
-
-                with open(output_file, 'w') as f:
-                    f.write(json.dumps(self.header.get_query_header()) + '\n')
-                    df.to_csv(f)
-
-                print('Done!')
-
-            return df
-        else:
-            from loadit.queries import set_index
-
-            if mem_handler.level == 0:
-                index0 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
-                index1 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
-                set_index(LIDs_queried, IDs_queried, index0, index1)
-                arrays = [pa.array(index0.ravel()), pa.array(index1.ravel())]
-                arrays += [pa.array(data[:, i]) for i in range(len(fields))]
-            elif mem_handler.level == 1:
-                index0 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
-                index1 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
-                set_index(LIDs_queried, np.arange(len(groups), dtype=np.int64), index0, index1)
-                arrays = [pa.array(index0.ravel()),
-                          pa.DictionaryArray.from_arrays(pa.array(index1.ravel()), pa.array(list(groups)))]
-                arrays += [pa.array(data[:, i]) for i in range(len(fields))]
-            else:
-
-                if groups:
-                    index = np.arange(len(groups), dtype=np.int64)
-                    arrays = [pa.DictionaryArray.from_arrays(pa.array(index), pa.array(list(groups)))]
-                else:
-                    arrays = [pa.array(IDs_queried)]
-
-                arrays += [pa.array(data[field]) for field in data]
-
-            print('Done!')
-            return pa.RecordBatch.from_arrays(arrays, index_names + columns,
-                                              metadata={b'index_columns': json.dumps(index_names).encode(),
-                                                        b'header': json.dumps(self.header.get_query_header()).encode()})
+        print('Done!')
+        return pa.RecordBatch.from_arrays(arrays, index_names + columns,
+                                          metadata={b'index_columns': json.dumps(index_names).encode(),
+                                                    b'header': json.dumps(self.header.get_query_header()).encode()})
 
 
 def process_field(field, basic_field, table, query_functions, geometry,
@@ -1141,6 +1111,56 @@ def is_abs(field):
         return field[4:-1], True
     else:
         return field, False
+
+
+def get_dataframe(record_batch, set_index=True):
+    """
+    Get a pandas dataframe from query record_batch output.
+
+    Parameters
+    ----------
+    record_batch : pyarrow.RecordBatch
+        RecordBatch queried.
+    set_index : bool, optional
+        Set DataFrame index.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame queried.
+    """
+    df = record_batch.to_pandas()
+
+    if set_index:
+        df.set_index(json.loads(record_batch.schema.metadata[b'index_columns'].decode()), inplace=True)
+
+    return df
+
+
+def write_query(record_batch, output_file):
+    """
+    Write query output file (csv or parquet).
+
+    Parameters
+    ----------
+    record_batch : pyarrow.RecordBatch
+        RecordBatch queried.
+    output_file : str
+        Output file (*.csv or *.parquet).
+    """
+    print(f"Writing '{output_file}'...", end=' ')
+    _, extension = os.path.splitext(output_file)
+
+    if extension == '.csv':
+
+        with open(output_file, 'w') as f:
+            f.write(record_batch.schema.metadata[b'header'].decode() + '\n')
+            get_dataframe(record_batch, False).to_csv(f, index=False)
+            
+    elif extension == '.parquet':
+        pq.write_table(pa.Table.from_batches([record_batch]), output_file, version='2.0')
+
+    print('Done!')
 
 
 def truncate_file(file, offset):

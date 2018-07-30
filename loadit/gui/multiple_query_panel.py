@@ -1,7 +1,7 @@
 import wx
 import os
 import json
-from loadit.database import parse_query
+from loadit.database import parse_query, write_query
 
 
 class MultipleQueryPanel(wx.Panel):
