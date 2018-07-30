@@ -19,7 +19,7 @@ class NewBatchDialog(wx.Dialog):
         self._name = wx.TextCtrl(self, size=(400, -1))
         self._name.Bind(wx.EVT_TEXT, self.update)
         field_sizer.Add(self._name, 0, wx.LEFT + wx.EXPAND, 5)
-        sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 5)
+        sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 15)
         sizer.Add(-1, 8)
 
         # Comment
@@ -27,7 +27,7 @@ class NewBatchDialog(wx.Dialog):
         field_sizer.Add(wx.StaticText(self, label='Comment:', size=(65, -1)), 0, wx.RIGHT + wx.ALIGN_LEFT, 5)
         self._comment = wx.TextCtrl(self, style=wx.TE_MULTILINE, size=(400, 100))
         field_sizer.Add(self._comment, 0, wx.LEFT + wx.EXPAND, 5)
-        sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 5)
+        sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 15)
         sizer.Add(-1, 8)
 
         # Files
@@ -36,7 +36,7 @@ class NewBatchDialog(wx.Dialog):
         self._files.InsertColumn(0, 'File', width=540)
         self._files.InsertColumn(1, 'Size', width=80)
         self._files.Bind(wx.EVT_LIST_ITEM_RIGHT_CLICK, self.show_menu)
-        sizer.Add(self._files, 1, wx.ALL + wx.EXPAND, 5)
+        sizer.Add(self._files, 1, wx.ALL + wx.EXPAND, 15)
 
         # Buttons
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)

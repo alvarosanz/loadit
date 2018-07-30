@@ -1,4 +1,5 @@
 import wx
+import os
 import re
 import json
 from loadit.database import parse_query, write_query
@@ -41,6 +42,7 @@ class QueryPanel(wx.Panel):
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)
         field_sizer.Add(wx.StaticText(panel, label='File:'), 0, wx.ALL + wx.ALIGN_LEFT + wx.ALIGN_TOP, 5)
         self._groups_file = wx.TextCtrl(panel, id=wx.ID_ANY, style= wx.TE_READONLY, size=(400, -1))
+        self._groups_file.Bind(wx.EVT_TEXT, self.update_buttons)
         field_sizer.Add(self._groups_file, 1, wx.ALL + wx.ALIGN_TOP, 5)
         button = wx.Button(panel, id=wx.ID_ANY, label='Select')
         button.Bind(wx.EVT_BUTTON, self.select_groups_file)
@@ -76,6 +78,7 @@ class QueryPanel(wx.Panel):
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)
         field_sizer.Add(wx.StaticText(panel, label='File:'), 0, wx.ALL + wx.ALIGN_LEFT + wx.ALIGN_TOP, 5)
         self._LIDs_file = wx.TextCtrl(panel, id=wx.ID_ANY, style= wx.TE_READONLY, size=(400, -1))
+        self._LIDs_file.Bind(wx.EVT_TEXT, self.update_buttons)
         field_sizer.Add(self._LIDs_file, 1, wx.ALL + wx.ALIGN_TOP, 5)
         button = wx.Button(panel, id=wx.ID_ANY, label='Select')
         button.Bind(wx.EVT_BUTTON, self.select_LIDs_file)
@@ -87,6 +90,7 @@ class QueryPanel(wx.Panel):
         panel.SetSizer(panel_sizer)
         self.LIDs_notebook.AddPage(panel, 'By Combinations')
         self.LIDs_notebook.ChangeSelection(0)
+        self.LIDs_notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.update_buttons)
         sizer.Add(self.LIDs_notebook, 0, wx.ALL + wx.EXPAND, 5)
 
         # Fields
@@ -128,6 +132,7 @@ class QueryPanel(wx.Panel):
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)
         field_sizer.Add(wx.StaticText(self, label='Output file:', size=(90, -1)), 0, wx.RIGHT + wx.ALIGN_LEFT, 5)
         self._output_file = wx.TextCtrl(self, id=wx.ID_ANY, style= wx.TE_READONLY, size=(320, -1))
+        self._output_file.Bind(wx.EVT_TEXT, self.update_buttons)
         field_sizer.Add(self._output_file, 0, wx.LEFT + wx.EXPAND, 5)
         button = wx.Button(self, id=wx.ID_ANY, label='Select')
         button.Bind(wx.EVT_BUTTON, self.select_output_file)
@@ -141,13 +146,13 @@ class QueryPanel(wx.Panel):
 
         # Buttons
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        button = wx.Button(self, id=wx.ID_ANY, label='Save')
-        button.Bind(wx.EVT_BUTTON, self.save_query)
-        field_sizer.Add(button, 0, wx.LEFT + wx.EXPAND, 5)
-        button = wx.Button(self, id=wx.ID_ANY, label='Query')
-        button.Bind(wx.EVT_BUTTON, self.do_query)
-        button.SetDefault()
-        field_sizer.Add(button, 0, wx.LEFT + wx.EXPAND, 5)
+        self.save_button = wx.Button(self, id=wx.ID_ANY, label='Save')
+        self.save_button.Bind(wx.EVT_BUTTON, self.save_query)
+        field_sizer.Add(self.save_button, 0, wx.LEFT + wx.EXPAND, 5)
+        self.query_button = wx.Button(self, id=wx.ID_ANY, label='Query')
+        self.query_button.Bind(wx.EVT_BUTTON, self.do_query)
+        self.query_button.SetDefault()
+        field_sizer.Add(self.query_button, 0, wx.LEFT + wx.EXPAND, 5)
         sizer.Add(field_sizer, 0, wx.ALL + wx.ALIGN_BOTTOM + wx.ALIGN_RIGHT, 15)
 
         self.SetSizer(sizer)
@@ -173,26 +178,28 @@ class QueryPanel(wx.Panel):
             fields += [f'ABS({field})' for field in fields]
 
             if event and event.GetEventObject() is self.IDs_notebook:
-                ID_tab_selection = event.GetSelection()
+                IDs_tab_selection = event.GetSelection()
             else:
-                ID_tab_selection = self.IDs_notebook.GetSelection()
+                IDs_tab_selection = self.IDs_notebook.GetSelection()
 
             if event and event.GetEventObject() in self._fields:
                 field = event.GetEventObject()
                 aggregation = self._fields[field]
 
                 if field.GetString(field.GetSelection()) == '':
-                    self.set_field(field, aggregation, ID_tab_selection == 0, [''] + fields, False)
+                    self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, False)
                 else:
-                    self.set_field(field, aggregation, ID_tab_selection == 0, [''] + fields, True)
+                    self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, True)
 
             else:
         
                 for field, aggregation in self._fields.items():
-                    self.set_field(field, aggregation, ID_tab_selection == 0, [''] + fields, False)
+                    self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, False)
                 
         else:
             self.Enabled = False
+
+        self.update_buttons(event)
             
         if event:
             event.Skip()
@@ -235,7 +242,36 @@ class QueryPanel(wx.Panel):
         self.update_fields(None)
     
     def on_output_type_change(self, event):
-        self._output_file.Value = ''
+
+        if self._output_file.Value:
+            self._output_file.Value = os.path.splitext(self._output_file.Value)[0] + '.' + self._output_type.GetString(self._output_type.GetSelection())
+
+        self.update_buttons(None)
+
+    def update_buttons(self, event):
+
+        if event and event.GetEventObject() is self.IDs_notebook:
+            IDs_tab_selection = event.GetSelection()
+        else:
+            IDs_tab_selection = self.IDs_notebook.GetSelection()
+
+        if event and event.GetEventObject() is self.LIDs_notebook:
+            LIDs_tab_selection = event.GetSelection()
+        else:
+            LIDs_tab_selection = self.LIDs_notebook.GetSelection()
+
+        if (self._output_file.Value and
+            (IDs_tab_selection == 0 or IDs_tab_selection == 1 and self._groups_file.Value) and
+            (LIDs_tab_selection == 0 or LIDs_tab_selection == 1 and self._LIDs_file.Value) and
+            any(field.GetString(field.GetSelection()) for field in self._fields)):
+            self.save_button.Enabled = True
+            self.query_button.Enabled = True
+        else:
+            self.save_button.Enabled = False
+            self.query_button.Enabled = False
+
+        if event:
+            event.Skip()
 
     def select_groups_file(self, event):
 
