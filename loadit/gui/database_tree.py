@@ -4,6 +4,7 @@ import wx.lib.agw.hypertreelist
 from loadit.misc import humansize
 from loadit.gui.new_batch_dialog import NewBatchDialog
 from loadit.gui.table_info_dialog import TableInfoDialog
+from loadit.gui.check_dialog import CheckDialog
 
 
 class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
@@ -104,7 +105,9 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
             dialog.ShowModal()
 
     def check(self, event):
-        pass
+
+        with CheckDialog(self.root, self.database.check(print_to_screen=False)) as dialog:
+            dialog.ShowModal()
 
     def new_batch(self, event):
 
