@@ -3,6 +3,7 @@ import os
 import wx.lib.agw.hypertreelist
 from loadit.misc import humansize
 from loadit.gui.new_batch_dialog import NewBatchDialog
+from loadit.gui.table_info_dialog import TableInfoDialog
 
 
 class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
@@ -23,7 +24,15 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         read_only = not self.parent.is_local and self.database.read_only
         item = event.GetItem()
 
-        if item is self.batches or item.GetParent() is self.batches:
+        if item is self.root_item:
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Check')
+            self.Bind(wx.EVT_MENU, self.check, menu_item)        
+        elif (item.GetParent() is self.tables or
+              item.GetParent() and item.GetParent().GetParent() is self.tables or
+              item.GetParent().GetParent() and item.GetParent().GetParent().GetParent() is self.tables):
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Info')
+            self.Bind(wx.EVT_MENU, self.table_info, menu_item)
+        elif item is self.batches or item.GetParent() is self.batches:
             menu_item = popupmenu.Append(wx.ID_ANY, 'New')
             self.Bind(wx.EVT_MENU, self.new_batch, menu_item)
             menu_item.Enable(not read_only)
@@ -84,6 +93,18 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         self.Expand(self.tables)
         self.Expand(self.batches)
         self.Expand(self.attachments)
+
+    def table_info(self, event):
+        item = self.GetSelection()
+
+        while not item.GetParent() is self.tables:
+            item = item.GetParent()
+
+        with TableInfoDialog(self.root, self.database.header.tables[item.GetText()], self.database) as dialog:
+            dialog.ShowModal()
+
+    def check(self, event):
+        pass
 
     def new_batch(self, event):
 
