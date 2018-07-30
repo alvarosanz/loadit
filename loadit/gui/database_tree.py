@@ -123,7 +123,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         batch = self.GetSelection().GetText()
         batches = [batch[0] for batch in self.database.header.batches]
         
-        with wx.SingleChoiceDialog(self.root, 'Batch:', 'Restore database', batches) as dialog:
+        with wx.SingleChoiceDialog(self.root, 'Batch:', 'Restore Database', batches) as dialog:
             dialog.SetSelection(batches.index(batch))
 
             if dialog.ShowModal() == wx.ID_OK:
