@@ -153,11 +153,26 @@ class DatabaseClient(BaseClient):
                                    'IDs': set(table['IDs'])} for name, table in
                             self.header.tables.items()}
 
-    def check(self):
+    def check(self, print_to_screen=True):
         """
         Check database integrity.
+
+        Parameters
+        ----------
+        print_to_screen : bool, optional
+            Whether to print to screen or return an string instead.
+
+        Returns
+        -------
+        str, optional
+            Database check integrity results.
         """
-        print(self._request(request_type='check')['msg'])
+        info = self._request(request_type='check')['msg']
+
+        if print_to_screen:
+            print(info)
+        else:
+            return info
 
     def add_attachment(self, file):
         """
