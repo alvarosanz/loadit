@@ -54,3 +54,5 @@ class CustomStatusBar(wx.StatusBar):
 
         if msg != '\n':
             self.SetStatusText(msg.replace('\n', '; '))
+
+        wx.Yield()
