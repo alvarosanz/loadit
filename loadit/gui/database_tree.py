@@ -3,6 +3,7 @@ import os
 import wx.lib.agw.hypertreelist
 from loadit.misc import humansize
 from loadit.gui.new_batch_dialog import NewBatchDialog
+from loadit.gui.database_info_dialog import DatabaseInfoDialog
 from loadit.gui.table_info_dialog import TableInfoDialog
 from loadit.gui.check_dialog import CheckDialog
 
@@ -10,7 +11,7 @@ from loadit.gui.check_dialog import CheckDialog
 class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
 
     def __init__(self, parent, root, database):
-        super().__init__(parent, wx.ID_ANY, style=wx.TR_HAS_BUTTONS + wx.TR_HIDE_ROOT + wx.TR_SINGLE +
+        super().__init__(parent, wx.ID_ANY, size=(320, -1), style=wx.TR_HAS_BUTTONS + wx.TR_HIDE_ROOT + wx.TR_SINGLE +
                          wx.lib.agw.hypertreelist.TR_ELLIPSIZE_LONG_ITEMS + wx.lib.agw.hypertreelist.LIST_AUTOSIZE_CONTENT_OR_HEADER)
         self.database = database
         self.parent = parent
@@ -26,15 +27,17 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         item = event.GetItem()
 
         if item is self.root_item:
-            menu_item = popupmenu.Append(wx.ID_ANY, 'Check')
-            self.Bind(wx.EVT_MENU, self.check, menu_item)        
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Database Info')
+            self.Bind(wx.EVT_MENU, self.database_info, menu_item)
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Check Integrity')
+            self.Bind(wx.EVT_MENU, self.check, menu_item)
         elif (item.GetParent() is self.tables or
               item.GetParent() and item.GetParent().GetParent() is self.tables or
               item.GetParent().GetParent() and item.GetParent().GetParent().GetParent() is self.tables):
-            menu_item = popupmenu.Append(wx.ID_ANY, 'Info')
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Table Info')
             self.Bind(wx.EVT_MENU, self.table_info, menu_item)
         elif item is self.batches or item.GetParent() is self.batches:
-            menu_item = popupmenu.Append(wx.ID_ANY, 'New')
+            menu_item = popupmenu.Append(wx.ID_ANY, 'New Batch')
             self.Bind(wx.EVT_MENU, self.new_batch, menu_item)
             menu_item.Enable(not read_only)
 
@@ -63,7 +66,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         try:
             self.DeleteChildren(self.root_item)
         except AttributeError:
-            self.root_item = self.AddRoot(os.path.basename(self.database.path))
+            self.root_item = self.AddRoot(self.database.header.name)
 
         self.tables = self.AppendItem(self.root_item, f'Tables ({len(self.database.header.tables)})')
 
@@ -94,6 +97,11 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         self.Expand(self.tables)
         self.Expand(self.batches)
         self.Expand(self.attachments)
+
+    def database_info(self, event):
+
+        with DatabaseInfoDialog(self.root, self.database) as dialog:
+            dialog.ShowModal()
 
     def table_info(self, event):
         item = self.GetSelection()

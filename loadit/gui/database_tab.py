@@ -14,7 +14,7 @@ class DatabaseTab(wx.Panel):
 
         self.tree = DatabaseTree(self, self.root, self.database)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(self.tree, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(self.tree, 0, wx.EXPAND | wx.ALL, 5)
 
         notebook = wx.Notebook(self)
 
@@ -24,7 +24,7 @@ class DatabaseTab(wx.Panel):
         notebook.AddPage(self.multiple_query_panel, 'Multiple Query')
         notebook.ChangeSelection(0)
 
-        sizer.Add(notebook, 2, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(notebook, 1, wx.EXPAND | wx.ALL, 5)
         self.SetSizer(sizer)
 
     def update(self):
