@@ -7,10 +7,12 @@ from loadit.database import parse_query, write_query
 
 class QueryPanel(wx.Panel):
 
-    def __init__(self, parent, root, database):
+    def __init__(self, parent, root, database, results_panel):
         super().__init__(parent=parent, id=wx.ID_ANY)
         self.root = root
+        self.parent = parent
         self.database = database
+        self.results_panel = results_panel
         
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(-1, 8)
@@ -261,11 +263,15 @@ class QueryPanel(wx.Panel):
         else:
             LIDs_tab_selection = self.LIDs_notebook.GetSelection()
 
-        if (self._output_file.Value and
-            (IDs_tab_selection == 0 or IDs_tab_selection == 1 and self._groups_file.Value) and
+        if ((IDs_tab_selection == 0 or IDs_tab_selection == 1 and self._groups_file.Value) and
             (LIDs_tab_selection == 0 or LIDs_tab_selection == 1 and self._LIDs_file.Value) and
             any(field.GetString(field.GetSelection()) for field in self._fields)):
-            self.save_button.Enabled = True
+
+            if self._output_file.Value:
+                self.save_button.Enabled = True
+            else:
+                self.save_button.Enabled = False
+
             self.query_button.Enabled = True
         else:
             self.save_button.Enabled = False
@@ -321,7 +327,13 @@ class QueryPanel(wx.Panel):
 
     def do_query(self, event):
         query = self.get_query()
-        write_query(self.database.query(**parse_query(query, True)), query['output_file'])
+        results = self.database.query(**parse_query(query, True))
+
+        if query['output_file']:
+            write_query(results, query['output_file'])
+
+        self.results_panel.update(results)
+        self.parent.SetSelection(0)
 
     def get_query(self):
         query = dict()
