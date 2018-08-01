@@ -177,6 +177,11 @@ class QueryPanel(wx.Panel):
             fields += table['query_functions']
             fields += [f'ABS({field})' for field in fields]
 
+            if event and not event.GetEventObject() is self._table:
+                reset_field = False
+            else:
+                reset_field = True
+
             if event and event.GetEventObject() is self.IDs_notebook:
                 IDs_tab_selection = event.GetSelection()
             else:
@@ -185,16 +190,11 @@ class QueryPanel(wx.Panel):
             if event and event.GetEventObject() in self._fields:
                 field = event.GetEventObject()
                 aggregation = self._fields[field]
-
-                if field.GetString(field.GetSelection()) == '':
-                    self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, False)
-                else:
-                    self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, True)
-
+                self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, reset_field)
             else:
         
                 for field, aggregation in self._fields.items():
-                    self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, False)
+                    self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, reset_field)
                 
         else:
             self.Enabled = False
@@ -204,12 +204,13 @@ class QueryPanel(wx.Panel):
         if event:
             event.Skip()
 
-    def set_field(self, field, aggregation, by_id, fields, activate_agreggation):
+    def set_field(self, field, aggregation, by_id, fields, reset_field):
 
-        if not activate_agreggation:
+        if reset_field:
             field.SetItems(fields)
             field.SetSelection(0)
-            field.Enabled = True
+
+        if field.GetString(field.GetSelection()) == '':
             aggregation.SetItems([''])
             aggregation.Enabled = False
         else:
@@ -239,7 +240,7 @@ class QueryPanel(wx.Panel):
 
         self._critical_LIDs.SetValue(self.critical_LIDs)
         self._critical_LIDs2.SetValue(self.critical_LIDs)
-        self.update_fields(None)
+        self.update_fields(event)
     
     def on_output_type_change(self, event):
 
