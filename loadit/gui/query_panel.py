@@ -122,8 +122,8 @@ class QueryPanel(wx.Panel):
         # Geometry file
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)
         field_sizer.Add(wx.StaticText(self, label='Geometry file:', size=(90, -1)), 0, wx.RIGHT + wx.ALIGN_LEFT, 5)
-        self._geometry_file = wx.TextCtrl(self, id=wx.ID_ANY, style= wx.TE_READONLY, size=(320, -1))
-        field_sizer.Add(self._geometry_file, 0, wx.LEFT + wx.EXPAND, 5)
+        self._geometry_file = wx.TextCtrl(self, id=wx.ID_ANY, style= wx.TE_READONLY)
+        field_sizer.Add(self._geometry_file, 1, wx.LEFT + wx.EXPAND, 5)
         button = wx.Button(self, id=wx.ID_ANY, label='Select')
         button.Bind(wx.EVT_BUTTON, self.select_geometry_file)
         field_sizer.Add(button, 0, wx.LEFT + wx.EXPAND, 5)
@@ -133,16 +133,12 @@ class QueryPanel(wx.Panel):
         # Output file
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)
         field_sizer.Add(wx.StaticText(self, label='Output file:', size=(90, -1)), 0, wx.RIGHT + wx.ALIGN_LEFT, 5)
-        self._output_file = wx.TextCtrl(self, id=wx.ID_ANY, style= wx.TE_READONLY, size=(320, -1))
+        self._output_file = wx.TextCtrl(self, id=wx.ID_ANY, style= wx.TE_READONLY)
         self._output_file.Bind(wx.EVT_TEXT, self.update_buttons)
-        field_sizer.Add(self._output_file, 0, wx.LEFT + wx.EXPAND, 5)
+        field_sizer.Add(self._output_file, 1, wx.LEFT + wx.EXPAND, 5)
         button = wx.Button(self, id=wx.ID_ANY, label='Select')
         button.Bind(wx.EVT_BUTTON, self.select_output_file)
         field_sizer.Add(button, 0, wx.LEFT + wx.EXPAND, 5)
-        field_sizer.Add(wx.StaticText(self, label='Type:'), 0, wx.LEFT + wx.ALIGN_RIGHT, 25)
-        self._output_type = wx.Choice(self, choices=['csv', 'parquet'], size=(80, -1))
-        self._output_type.Bind(wx.EVT_CHOICE, self.on_output_type_change)
-        field_sizer.Add(self._output_type, 0, wx.LEFT + wx.EXPAND, 5)
         sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 5)
         sizer.Add(-1, 8)
 
@@ -243,13 +239,6 @@ class QueryPanel(wx.Panel):
         self._critical_LIDs.SetValue(self.critical_LIDs)
         self._critical_LIDs2.SetValue(self.critical_LIDs)
         self.update_fields(event)
-    
-    def on_output_type_change(self, event):
-
-        if self._output_file.Value:
-            self._output_file.Value = os.path.splitext(self._output_file.Value)[0] + '.' + self._output_type.GetString(self._output_type.GetSelection())
-
-        self.update_buttons(None)
 
     def update_buttons(self, event):
 
@@ -302,11 +291,7 @@ class QueryPanel(wx.Panel):
                 self._geometry_file.SetValue(dialog.GetPath())
 
     def select_output_file(self, event):
-
-        if self._output_type.GetSelection() == 0:
-            wildcard = 'CSV files (*.csv)|*.csv'
-        else:
-            wildcard = 'PARQUET files (*.parquet)|*.parquet'
+        wildcard = 'CSV files (*.csv)|*.csv|EXCEL files (*.xlsx)|*.xlsx|PARQUET files (*.parquet)|*.parquet'
 
         with wx.FileDialog(self.root, 'Select output file', style=wx.FD_SAVE + wx.FD_OVERWRITE_PROMPT, wildcard=wildcard) as dialog:
     

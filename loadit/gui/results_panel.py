@@ -22,12 +22,9 @@ class ResultsPanel(wx.Panel):
         self.copy_to_clipboard_button = wx.Button(self, id=wx.ID_ANY, label='Copy to clipboard')
         self.copy_to_clipboard_button.Bind(wx.EVT_BUTTON, self.copy_to_clipboard)
         field_sizer.Add(self.copy_to_clipboard_button, 0, wx.LEFT + wx.EXPAND, 5)
-        self.save_as_csv_button = wx.Button(self, id=wx.ID_ANY, label='Save as .csv')
-        self.save_as_csv_button.Bind(wx.EVT_BUTTON, self.save_as_csv)
-        field_sizer.Add(self.save_as_csv_button, 0, wx.LEFT + wx.EXPAND, 5)
-        self.save_as_parquet_button = wx.Button(self, id=wx.ID_ANY, label='Save as .parquet')
-        self.save_as_parquet_button.Bind(wx.EVT_BUTTON, self.save_as_parquet)
-        field_sizer.Add(self.save_as_parquet_button, 0, wx.LEFT + wx.EXPAND, 5)
+        self.save_button = wx.Button(self, id=wx.ID_ANY, label='Save As')
+        self.save_button.Bind(wx.EVT_BUTTON, self.save)
+        field_sizer.Add(self.save_button, 0, wx.LEFT + wx.EXPAND, 5)
         sizer.Add(field_sizer, 0, wx.ALL + wx.ALIGN_BOTTOM + wx.ALIGN_RIGHT, 15)
 
         self.SetSizer(sizer)
@@ -36,15 +33,10 @@ class ResultsPanel(wx.Panel):
         self.results = record_batch
         self._results.update(record_batch)
 
-    def save_as_csv(self, event):
-        self.save('csv')
+    def save(self, event):
+        wildcard = 'CSV files (*.csv)|*.csv|EXCEL files (*.xlsx)|*.xlsx|PARQUET files (*.parquet)|*.parquet'
 
-    def save_as_parquet(self, event):
-        self.save('parquet')
-
-    def save(self, output_type):
-
-        with wx.FileDialog(self.root, 'Save output file', style=wx.FD_SAVE + wx.FD_OVERWRITE_PROMPT, wildcard=f'{output_type.upper()} files (*.{output_type})|*.{output_type}') as dialog:
+        with wx.FileDialog(self.root, 'Save output file', style=wx.FD_SAVE + wx.FD_OVERWRITE_PROMPT, wildcard=wildcard) as dialog:
     
             if dialog.ShowModal() == wx.ID_OK:
                 write_query(self.results, dialog.GetPath())

@@ -1146,7 +1146,7 @@ def write_query(record_batch, output_file):
     record_batch : pyarrow.RecordBatch
         RecordBatch queried.
     output_file : str
-        Output file (*.csv or *.parquet).
+        Output file (*.csv, *.xlsx or *.parquet).
     """
     print(f"Writing '{output_file}'...", end=' ')
     _, extension = os.path.splitext(output_file)
@@ -1156,6 +1156,9 @@ def write_query(record_batch, output_file):
         with open(output_file, 'w') as f:
             f.write(record_batch.schema.metadata[b'header'].decode() + '\n')
             get_dataframe(record_batch, False).to_csv(f, index=False)
+
+    elif extension == '.xlsx':
+        get_dataframe(record_batch, False).to_excel(output_file)
             
     elif extension == '.parquet':
         pq.write_table(pa.Table.from_batches([record_batch]), output_file, version='2.0')
