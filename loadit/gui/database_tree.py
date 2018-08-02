@@ -27,14 +27,14 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         item = event.GetItem()
 
         if item is self.root_item:
-            menu_item = popupmenu.Append(wx.ID_ANY, 'Database Info')
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Show Info')
             self.Bind(wx.EVT_MENU, self.database_info, menu_item)
             menu_item = popupmenu.Append(wx.ID_ANY, 'Check Integrity')
             self.Bind(wx.EVT_MENU, self.check, menu_item)
         elif (item.GetParent() is self.tables or
               item.GetParent() and item.GetParent().GetParent() is self.tables or
               item.GetParent().GetParent() and item.GetParent().GetParent().GetParent() is self.tables):
-            menu_item = popupmenu.Append(wx.ID_ANY, 'Table Info')
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Show Info')
             self.Bind(wx.EVT_MENU, self.table_info, menu_item)
         elif item is self.batches or item.GetParent() is self.batches:
             menu_item = popupmenu.Append(wx.ID_ANY, 'New Batch')

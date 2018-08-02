@@ -21,7 +21,7 @@ class QueryPanel(wx.Panel):
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)
         field_sizer.Add(wx.StaticText(self, label='Table:'), 0, wx.RIGHT + wx.ALIGN_LEFT, 5)
         self._table = wx.Choice(self, size=(300, -1))
-        self._table.Bind(wx.EVT_CHOICE, self.update_fields)
+        self._table.Bind(wx.EVT_CHOICE, self.on_table_change)
         field_sizer.Add(self._table, 0, wx.LEFT + wx.EXPAND, 5)
         sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 5)
         sizer.Add(-1, 8)
@@ -104,7 +104,7 @@ class QueryPanel(wx.Panel):
         # Fields
         fields_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self._fields = dict()
-        self.last_used_field = None
+        self._aggregations = dict()
 
         for column in range(2):
             fields_column_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -115,10 +115,12 @@ class QueryPanel(wx.Panel):
                 field = wx.Choice(self, size=(125, -1))
                 field.Bind(wx.EVT_CHOICE, self.update_fields)
                 field_sizer.Add(field, 0, wx.ALL + wx.EXPAND, 1)
-                aggregations = wx.Choice(self, size=(125, -1), choices=[])
-                field_sizer.Add(aggregations, 0, wx.ALL + wx.EXPAND, 1)
+                aggregation = wx.Choice(self, size=(125, -1), choices=[])
+                aggregation.Bind(wx.EVT_CHOICE, self.update_fields)
+                field_sizer.Add(aggregation, 0, wx.ALL + wx.EXPAND, 1)
                 fields_column_sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 1)
-                self._fields[field] = aggregations
+                self._fields[field] = aggregation
+                self._aggregations[aggregation] = [field, None, None]
             
             fields_sizer.Add(fields_column_sizer, 0, wx.LEFT + wx.RIGHT + wx.EXPAND, 10)
 
@@ -175,36 +177,51 @@ class QueryPanel(wx.Panel):
 
         self.update_fields(None)
 
+    def on_table_change(self, event):
+        self._IDs.Value = ''
+        self._groups_file.Value = ''
+        self.update_fields(event)
+
     def update_fields(self, event):
 
         if self.database.header.tables:
             self.Enabled = True
-            table = self.database.header.tables[self._table.GetString(self._table.GetSelection())]
-            self.LIDs_label.SetLabel(table['columns'][0][0] + 's:')
-            self.IDs_label.SetLabel(table['columns'][1][0] + 's:')
-            self.IDs_notebook.SetPageText(0, 'By ' + table['columns'][1][0] + 's')
-            fields = [field[0] for field in table['columns'][2:]]
-            fields += table['query_functions']
-            fields += [f'ABS({field})' for field in fields]
 
             if event and not event.GetEventObject() is self._table:
-                reset_field = False
+                fields = None
             else:
-                reset_field = True
+                table = self.database.header.tables[self._table.GetString(self._table.GetSelection())]
+                self.LIDs_label.SetLabel(table['columns'][0][0] + 's:')
+                self.IDs_label.SetLabel(table['columns'][1][0] + 's:')
+                self.IDs_notebook.SetPageText(0, 'By ' + table['columns'][1][0] + 's')
+                fields = ['']
+                fields += [field[0] for field in table['columns'][2:]]
+                fields += table['query_functions']
+                fields += [f'ABS({field})' for field in fields]
 
             if event and event.GetEventObject() is self.IDs_notebook:
                 IDs_tab_selection = event.GetSelection()
             else:
                 IDs_tab_selection = self.IDs_notebook.GetSelection()
 
+            if IDs_tab_selection == 0:
+                by_id = True
+            else:
+                by_id = False
+
             if event and event.GetEventObject() in self._fields:
                 field = event.GetEventObject()
                 aggregation = self._fields[field]
-                self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, reset_field)
+                self._aggregations[aggregation] = [field, None, None]
+                self.set_field(field, aggregation, by_id, fields, True)
+            elif event and event.GetEventObject() in self._aggregations:
+                aggregation = event.GetEventObject()
+                field = self._aggregations[aggregation][0]
+                self.set_field(field, aggregation, by_id, fields, False)
             else:
         
                 for field, aggregation in self._fields.items():
-                    self.set_field(field, aggregation, IDs_tab_selection == 0, [''] + fields, reset_field)
+                    self.set_field(field, aggregation, by_id, fields, True)
                 
         else:
             self.Enabled = False
@@ -214,11 +231,14 @@ class QueryPanel(wx.Panel):
         if event:
             event.Skip()
 
-    def set_field(self, field, aggregation, by_id, fields, reset_field):
+    def set_field(self, field, aggregation, by_id, fields, reset_aggregation):
+        aggregations1 = {0: 'AVG', 1: 'ABS(AVG)', 2: 'MAX', 3: 'MIN'}
+        aggregations2 = {0: 'MAX', 1: 'MIN'}
 
-        if reset_field:
+        if fields:
             field.SetItems(fields)
             field.SetSelection(0)
+            self._aggregations[aggregation] = [field, None, None]
 
         if field.GetString(field.GetSelection()) == '':
             aggregation.SetItems([''])
@@ -229,22 +249,66 @@ class QueryPanel(wx.Panel):
             if by_id: # By ID
 
                 if not self.critical_LIDs: # All LIDs
-                    aggregation.SetItems([''])
-                    aggregation.SetSelection(0)
+
+                    if reset_aggregation:
+                        aggregation.SetItems([''])
+                        aggregation.SetSelection(0)
+
                     aggregation.Enabled = False
                 else: # Critical LID
-                    aggregation.SetItems(['MAX', 'MIN'])
-                    aggregation.SetSelection(0)
 
+                    if reset_aggregation:
+                        aggregation.SetItems(list(aggregations2.values()))
+
+                        if self._aggregations[aggregation][2] is None:
+                            aggregation.SetSelection(0)
+                        else:
+                            aggregation.SetSelection(self._aggregations[aggregation][2])
+                    
+                    self._aggregations[aggregation][2] = aggregation.GetSelection()
             else: # By group
                 
                 if not self.critical_LIDs: # All LIDs
-                    aggregation.SetItems(['AVG', 'ABS(AVG)', 'MAX', 'MIN'])
-                    aggregation.SetSelection(0)
-                else: # Critical LID
-                    aggregation.SetItems(['AVG-MAX', 'ABS(AVG)-MAX', 'AVG-MIN', 'MAX-MAX', 'MIN-MIN'])
-                    aggregation.SetSelection(0)
 
+                    if reset_aggregation:
+                        aggregation.SetItems(list(aggregations1.values()))
+
+                        if self._aggregations[aggregation][1] is None:
+                            aggregation.SetSelection(0)
+                        else:
+                            aggregation.SetSelection(self._aggregations[aggregation][1])
+
+                    self._aggregations[aggregation][1] = aggregation.GetSelection()
+                else: # Critical LID
+
+                    if reset_aggregation:
+                        items= ['AVG-MAX', 'ABS(AVG)-MAX', 'AVG-MIN', 'MAX-MAX', 'MIN-MIN']
+                        aggregation.SetItems(items)
+
+                        if self._aggregations[aggregation][1] is None and self._aggregations[aggregation][2] is None:
+                            aggregation.SetSelection(0)
+                        else:
+
+                            if self._aggregations[aggregation][1] is None:
+                                aggregation1 = 'AVG'
+                            else:
+                                aggregation1 = aggregations1[self._aggregations[aggregation][1]]
+
+                            if self._aggregations[aggregation][2] is None:
+                                aggregation2 = 'MAX'
+                            else:
+                                aggregation2 = aggregations2[self._aggregations[aggregation][2]]
+
+                            try:
+                                aggregation.SetSelection(items.index(f'{aggregation1}-{aggregation2}'))
+                            except ValueError:
+                                aggregation.SetSelection(1)
+
+                    if aggregation.GetString(aggregation.GetSelection())[-3:] == 'MAX':
+                        self._aggregations[aggregation][2] = 0
+                    else:
+                        self._aggregations[aggregation][2] = 1
+                    
     def update_critical_LIDs(self, event):
         self.critical_LIDs = event.GetEventObject().IsChecked()
 
