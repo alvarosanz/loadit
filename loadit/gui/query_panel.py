@@ -2,7 +2,7 @@ import wx
 import os
 import re
 import json
-from loadit.database import parse_query, write_query
+from loadit.database import parse_query, write_query, check_query
 
 
 class QueryPanel(wx.Panel):
@@ -391,7 +391,7 @@ class QueryPanel(wx.Panel):
         with wx.FileDialog(self.root, 'Save query file', style=wx.FD_SAVE + wx.FD_OVERWRITE_PROMPT, wildcard='JSON files (*.json)|*.json') as dialog:
     
             if dialog.ShowModal() == wx.ID_OK:
-                query = self.get_query()
+                query = self.get_query(parse=False)
                 
                 with open(dialog.GetPath(), 'w') as f:
                     json.dump(query, f, indent=4)
@@ -399,8 +399,8 @@ class QueryPanel(wx.Panel):
                 self.root.statusbar.SetStatusText('Query saved')
 
     def do_query(self, event):
-        query = self.get_query()
-        results = self.database.query(**parse_query(query, True))
+        query = self.get_query(parse=True)
+        results = self.database.query(**query)
 
         if query['output_file']:
             write_query(results, query['output_file'])
@@ -408,7 +408,7 @@ class QueryPanel(wx.Panel):
         self.results_panel.update(results)
         self.parent.SetSelection(0)
 
-    def get_query(self):
+    def get_query(self, parse=False):
         query = dict()
         query['output_file'] = self._output_file.GetValue()
         query['table'] = self._table.GetString(self._table.GetSelection())
@@ -437,5 +437,15 @@ class QueryPanel(wx.Panel):
             query['groups'] = self._groups_file.GetValue()
 
         query['geometry'] = self._geometry_file.GetValue()
+        parsed_query = parse_query(query, True)
 
-        return query
+        try:
+            check_query(parsed_query, self.database.header)
+        except ValueError as e:
+            self.root.statusbar.SetStatusText(str(e))
+            raise e
+
+        if parse:
+            return parsed_query
+        else:
+            return query

@@ -1246,3 +1246,99 @@ def parse_query(query, parse_files=False):
             pass
 
     return query
+
+
+def check_query(query, database_header):
+    assertions = {name: {'fields': {field for field, _ in table['columns'][2:]},
+                         'query_functions': set(table['query_functions']),
+                         'query_geometry': {'weigths'} | set(table['query_geometry']),
+                         'LIDs': set(table['LIDs']),
+                         'IDs': set(table['IDs'])} for name, table in
+                  database_header.tables.items()}
+
+    # table checking
+    if query['table'] not in assertions:
+        raise ValueError('Invalid table: {}'.format(query['table']))
+
+    # fields checking
+    if query['fields']:
+        check_aggregation_options(query['fields'], query['groups'])
+        basic_fields = {is_abs(field.split('-')[0])[0] for field in query['fields']}
+        invalid_fields = [field for field in basic_fields if
+                            field not in assertions[query['table']]['fields'] and
+                            field not in assertions[query['table']]['query_functions']]
+
+        if invalid_fields:
+            raise ValueError('Invalid field/s: {}'.format(', '.join(invalid_fields)))
+
+    # LIDs checking
+    if isinstance(query['LIDs'], dict):
+        new_LIDs = set()
+
+        for new_LID, seq in query['LIDs'].items():
+
+            if seq:
+
+                if new_LID in assertions[query['table']]['LIDs']:
+                    raise ValueError(f'Combined LID already exists: {new_LID}')
+
+                new_LIDs.add(new_LID)
+
+                for coeff in seq[::2]:
+
+                    if not type(coeff) is float:
+                        raise TypeError('Coefficient must be a float: {}'.format(query['LIDs'][new_LID]))
+
+                for LID in seq[1::2]:
+
+                    if LID not in assertions[query['table']]['LIDs'] and LID not in new_LIDs:
+                        raise ValueError(f'Missing LID: {LID}')
+
+            elif new_LID not in assertions[query['table']]['LIDs']:
+                raise ValueError(f'Missing LID: {new_LID}')
+
+    elif query['LIDs']:
+        missing_LIDs = {str(LID) for LID in query['LIDs'] if LID not in assertions[query['table']]['LIDs']}
+
+        if missing_LIDs:
+            raise ValueError('Missing {}/s: {}'.format(database_header.tables[query['table']]['columns'][0][0],
+                                                       ', '.join(missing_LIDs)))
+
+    # IDs and groups checking
+    if query['groups']:
+        empty_groups = {group for group in query['groups'] if not query['groups'][group]}
+
+        if empty_groups:
+            raise ValueError('Empty group/s: {}'.format(', '.join(empty_groups)))
+
+        IDs2read = {ID for IDs in query['groups'].values() for ID in IDs}
+    else:
+        IDs2read = query['IDs']
+
+    if IDs2read:
+        missing_IDs = {str(ID) for ID in IDs2read if ID not in assertions[query['table']]['IDs']}
+
+        if missing_IDs:
+            raise ValueError('Missing {}/s: {}'.format(database_header.tables[query['table']]['columns'][1][0],
+                                                       ', '.join(missing_IDs)))
+    else:
+        IDs2read = assertions[query['table']]['IDs']
+
+    # geometry checking
+    if query['geometry']:
+
+        for geom_param in query['geometry']:
+
+            if geom_param not in assertions[query['table']]['query_geometry']:
+                raise ValueError(f"Invalid geometric parameter: '{geom_param}'")
+
+            missing_IDs = {str(ID) for ID in IDs2read if ID not in query['geometry'][geom_param]}
+
+            if missing_IDs:
+                raise ValueError("Missing {}/s in geometry inputs ('{}'): {}".format(database_header.tables[query['table']]['columns'][1][0],
+                                                                                     geom_param, ', '.join(missing_IDs)))
+
+            for ID, value in query['geometry'][geom_param].items():
+
+                if not type(value) is float:
+                    raise TypeError('Geometry value must be a float!')

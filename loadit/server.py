@@ -349,7 +349,7 @@ class CentralServer(DatabaseServer):
         manager = Manager()
         start_workers(self.server_address, self.root_path, manager, 'admin', password,
                       n_workers=cpu_count() - 1, debug=self._debug)
-        print(f"Address: {self.server_address}")
+        print("Address: '{}:{}'".format(*self.server_address))
         self.serve_forever()
         print('Cluster shutdown')
 
