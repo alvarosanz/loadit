@@ -32,7 +32,11 @@ class DatabaseTab(wx.Panel):
         self.SetSizer(sizer)
 
     def update(self):
+        self.tree.database = self.database
+        self.tree.update()
+        self.single_query_panel.database = self.database
         self.single_query_panel.update()
+        self.multiple_query_panel.database = self.database
         self.multiple_query_panel.update()
 
     def on_tab_changing(self, event):

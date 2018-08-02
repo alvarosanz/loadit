@@ -29,6 +29,8 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         if item is self.root_item:
             menu_item = popupmenu.Append(wx.ID_ANY, 'Show Info')
             self.Bind(wx.EVT_MENU, self.database_info, menu_item)
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Refresh')
+            self.Bind(wx.EVT_MENU, self.refresh, menu_item)
             menu_item = popupmenu.Append(wx.ID_ANY, 'Check Integrity')
             self.Bind(wx.EVT_MENU, self.check, menu_item)
         elif (item.GetParent() is self.tables or
@@ -98,6 +100,15 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         self.Expand(self.batches)
         self.Expand(self.attachments)
 
+    def refresh(self, event):
+
+        if self.parent.is_local:
+            self.parent.database = self.root.client.load_database(self.database.path)
+        else:
+            self.parent.database = self.root.client.load_remote_database(self.database.path)
+
+        self.parent.update()
+
     def database_info(self, event):
 
         with DatabaseInfoDialog(self.root, self.database) as dialog:
@@ -125,7 +136,6 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
 
                 try:
                     self.database.new_batch(dialog.files, dialog.name, dialog.comment)
-                    self.update()
                     self.parent.update()
                 except Exception as e:
                     self.root.statusbar.SetStatusText(str(e))
@@ -142,7 +152,6 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
 
                 try:
                     self.database.restore(batch)
-                    self.update()
                     self.parent.update()
                 except Exception as e:
                     self.root.statusbar.SetStatusText(str(e))
