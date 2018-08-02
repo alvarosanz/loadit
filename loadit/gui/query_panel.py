@@ -49,6 +49,9 @@ class QueryPanel(wx.Panel):
         button = wx.Button(panel, id=wx.ID_ANY, label='Select')
         button.Bind(wx.EVT_BUTTON, self.select_groups_file)
         field_sizer.Add(button, 0, wx.ALL + wx.ALIGN_TOP, 5)
+        button = wx.Button(panel, id=wx.ID_ANY, label='Clear')
+        button.Bind(wx.EVT_BUTTON, self.clear_groups_file)
+        field_sizer.Add(button, 0, wx.ALL + wx.ALIGN_TOP, 5)
         panel.SetSizer(field_sizer)
         self.IDs_notebook.AddPage(panel, 'By Groups')
         self.IDs_notebook.ChangeSelection(0)
@@ -84,6 +87,9 @@ class QueryPanel(wx.Panel):
         field_sizer.Add(self._LIDs_file, 1, wx.ALL + wx.ALIGN_TOP, 5)
         button = wx.Button(panel, id=wx.ID_ANY, label='Select')
         button.Bind(wx.EVT_BUTTON, self.select_LIDs_file)
+        field_sizer.Add(button, 0, wx.ALL + wx.ALIGN_TOP, 5)
+        button = wx.Button(panel, id=wx.ID_ANY, label='Clear')
+        button.Bind(wx.EVT_BUTTON, self.clear_LIDs_file)
         field_sizer.Add(button, 0, wx.ALL + wx.ALIGN_TOP, 5)
         panel_sizer.Add(field_sizer, 1, wx.EXPAND)
         self._critical_LIDs2 = wx.CheckBox(panel, label='Critical Only')
@@ -127,6 +133,9 @@ class QueryPanel(wx.Panel):
         button = wx.Button(self, id=wx.ID_ANY, label='Select')
         button.Bind(wx.EVT_BUTTON, self.select_geometry_file)
         field_sizer.Add(button, 0, wx.LEFT + wx.EXPAND, 5)
+        button = wx.Button(self, id=wx.ID_ANY, label='Clear')
+        button.Bind(wx.EVT_BUTTON, self.clear_geometry_file)
+        field_sizer.Add(button, 0, wx.LEFT + wx.EXPAND, 5)
         sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 5)
         sizer.Add(-1, 8)
 
@@ -138,6 +147,9 @@ class QueryPanel(wx.Panel):
         field_sizer.Add(self._output_file, 1, wx.LEFT + wx.EXPAND, 5)
         button = wx.Button(self, id=wx.ID_ANY, label='Select')
         button.Bind(wx.EVT_BUTTON, self.select_output_file)
+        field_sizer.Add(button, 0, wx.LEFT + wx.EXPAND, 5)
+        button = wx.Button(self, id=wx.ID_ANY, label='Clear')
+        button.Bind(wx.EVT_BUTTON, self.clear_output_file)
         field_sizer.Add(button, 0, wx.LEFT + wx.EXPAND, 5)
         sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 5)
         sizer.Add(-1, 8)
@@ -275,6 +287,9 @@ class QueryPanel(wx.Panel):
     
             if dialog.ShowModal() == wx.ID_OK:
                 self._groups_file.SetValue(dialog.GetPath())
+    
+    def clear_groups_file(self, event):
+        self._groups_file.SetValue('')
 
     def select_LIDs_file(self, event):
 
@@ -283,12 +298,18 @@ class QueryPanel(wx.Panel):
             if dialog.ShowModal() == wx.ID_OK:
                 self._LIDs_file.SetValue(dialog.GetPath())
 
+    def clear_LIDs_file(self, event):
+        self._LIDs_file.SetValue('')
+
     def select_geometry_file(self, event):
 
         with wx.FileDialog(self.root, 'Select geometry file', style=wx.FD_DEFAULT_STYLE, wildcard='CSV files (*.csv)|*.csv') as dialog:
     
             if dialog.ShowModal() == wx.ID_OK:
                 self._geometry_file.SetValue(dialog.GetPath())
+
+    def clear_geometry_file(self, event):
+        self._geometry_file.SetValue('')
 
     def select_output_file(self, event):
         wildcard = 'CSV files (*.csv)|*.csv|EXCEL files (*.xlsx)|*.xlsx|PARQUET files (*.parquet)|*.parquet'
@@ -297,6 +318,9 @@ class QueryPanel(wx.Panel):
     
             if dialog.ShowModal() == wx.ID_OK:
                 self._output_file.SetValue(dialog.GetPath())
+
+    def clear_output_file(self, event):
+        self._output_file.SetValue('')
 
     def save_query(self, event):
 
