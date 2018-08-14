@@ -11,7 +11,7 @@ from loadit.gui.check_dialog import CheckDialog
 class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
 
     def __init__(self, parent, root, database):
-        super().__init__(parent, wx.ID_ANY, size=(320, -1), style=wx.TR_HAS_BUTTONS + wx.TR_HIDE_ROOT + wx.TR_SINGLE +
+        super().__init__(parent, wx.ID_ANY, size=(350, -1), style=wx.TR_HAS_BUTTONS + wx.TR_HIDE_ROOT + wx.TR_SINGLE +
                          wx.lib.agw.hypertreelist.TR_ELLIPSIZE_LONG_ITEMS + wx.lib.agw.hypertreelist.LIST_AUTOSIZE_CONTENT_OR_HEADER)
         self.database = database
         self.parent = parent

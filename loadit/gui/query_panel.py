@@ -175,6 +175,9 @@ class QueryPanel(wx.Panel):
         if self.database.header.tables:
             self._table.SetItems(list(self.database.header.tables))
 
+            if self._table.GetSelection() == wx.NOT_FOUND:
+                self._table.SetSelection(0)
+
         self.update_fields(None)
 
     def on_table_change(self, event):
