@@ -124,9 +124,16 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
             dialog.ShowModal()
 
     def check(self, event):
+        self.root.statusbar.SetStatusText('Checking integrity...')
+        check_summary = self.database.check(print_to_screen=False)
+        
+        if check_summary == 'Everything is OK!':
+            self.root.statusbar.SetStatusText(check_summary)
+        else:
+            self.root.statusbar.SetStatusText('There are corrupted file/s!')
 
-        with CheckDialog(self.root, self.database.check(print_to_screen=False)) as dialog:
-            dialog.ShowModal()
+            with CheckDialog(self.root, check_summary) as dialog:
+                dialog.ShowModal()
 
     def new_batch(self, event):
 
