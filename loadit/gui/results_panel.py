@@ -13,9 +13,13 @@ class ResultsPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(-1, 8)
 
-        self._results = RecordBatchTableGrid(self)
+        panel = wx.Panel(self, style=wx.BORDER_SIMPLE)
+        self._results = RecordBatchTableGrid(panel)
         self._results.SetReadOnly(5,5, True)
-        sizer.Add(self._results, 1, wx.ALL + wx.EXPAND, 5)
+        grid_sizer = wx.BoxSizer(wx.VERTICAL)
+        grid_sizer.Add(self._results, 1, wx.ALL + wx.EXPAND)
+        panel.SetSizer(grid_sizer)
+        sizer.Add(panel, 1, wx.ALL + wx.EXPAND, 5)
 
         # Buttons
         field_sizer = wx.BoxSizer(wx.HORIZONTAL)

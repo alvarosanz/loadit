@@ -186,6 +186,7 @@ class QueryPanel(wx.Panel):
         self.update_fields(event)
 
     def update_fields(self, event):
+        self.root.Freeze()
 
         if self.database.header.tables:
             self.Enabled = True
@@ -200,7 +201,7 @@ class QueryPanel(wx.Panel):
                 fields = ['']
                 fields += [field[0] for field in table['columns'][2:]]
                 fields += table['query_functions']
-                fields += [f'ABS({field})' for field in fields]
+                fields += [f'ABS({field})' for field in fields[1:]]
 
             if event and event.GetEventObject() is self.IDs_notebook:
                 IDs_tab_selection = event.GetSelection()
@@ -230,6 +231,7 @@ class QueryPanel(wx.Panel):
             self.Enabled = False
 
         self.update_buttons(event)
+        self.root.Thaw()
             
         if event:
             event.Skip()

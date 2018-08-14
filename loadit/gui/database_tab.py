@@ -41,5 +41,12 @@ class DatabaseTab(wx.Panel):
 
     def on_tab_changing(self, event):
         
-        if event.GetSelection() != 0 or self.results_panel.results:
+        if event.GetSelection() != 0:
             event.Skip()
+        else:
+
+            if self.results_panel.results:
+                self.results_panel.Enabled = True
+                event.Skip()
+            else:
+                self.results_panel.Enabled = False
