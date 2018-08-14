@@ -8,6 +8,7 @@ class TableInfoDialog(wx.Dialog):
     def __init__(self, parent, table, database):
         super().__init__(parent)
         self.SetTitle('Table Info')
+        self.SetSize((640, 480))
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(-1, 8)
@@ -17,7 +18,6 @@ class TableInfoDialog(wx.Dialog):
         field_sizer.Add(wx.StaticText(self, label='Name:'), 0, wx.RIGHT + wx.ALIGN_LEFT, 5)
         field_sizer.Add(wx.TextCtrl(self, value=table['name'], style=wx.TE_READONLY), 1, wx.LEFT + wx.EXPAND, 5)
         sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 15)
-        sizer.Add(-1, 8)
 
         notebook = wx.Notebook(self)
 

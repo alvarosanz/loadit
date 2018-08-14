@@ -27,17 +27,20 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         item = event.GetItem()
 
         if item is self.root_item:
-            menu_item = popupmenu.Append(wx.ID_ANY, 'Show Info')
-            self.Bind(wx.EVT_MENU, self.database_info, menu_item)
             menu_item = popupmenu.Append(wx.ID_ANY, 'Refresh')
             self.Bind(wx.EVT_MENU, self.refresh, menu_item)
             menu_item = popupmenu.Append(wx.ID_ANY, 'Check Integrity')
             self.Bind(wx.EVT_MENU, self.check, menu_item)
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Show Info')
+            self.Bind(wx.EVT_MENU, self.database_info, menu_item)
         elif (item.GetParent() is self.tables or
               item.GetParent() and item.GetParent().GetParent() is self.tables or
               item.GetParent().GetParent() and item.GetParent().GetParent().GetParent() is self.tables):
             menu_item = popupmenu.Append(wx.ID_ANY, 'Show Info')
             self.Bind(wx.EVT_MENU, self.table_info, menu_item)
+        elif item is self.tables:
+            menu_item = popupmenu.Append(wx.ID_ANY, 'Show Info')
+            self.Bind(wx.EVT_MENU, self.tables_info, menu_item)
         elif item is self.batches or item.GetParent() is self.batches:
             menu_item = popupmenu.Append(wx.ID_ANY, 'New Batch')
             self.Bind(wx.EVT_MENU, self.new_batch, menu_item)
@@ -47,6 +50,9 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                 menu_item = popupmenu.Append(wx.ID_ANY, 'Restore')
                 self.Bind(wx.EVT_MENU, self.restore, menu_item)
                 menu_item.Enable(not read_only)
+            else:
+                menu_item = popupmenu.Append(wx.ID_ANY, 'Show Info')
+                self.Bind(wx.EVT_MENU, self.batches_info, menu_item)
 
         elif item is self.attachments or item.GetParent() is self.attachments:
             menu_item = popupmenu.Append(wx.ID_ANY, 'Add')
@@ -60,6 +66,9 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                 menu_item = popupmenu.Append(wx.ID_ANY, 'Remove')
                 self.Bind(wx.EVT_MENU, self.remove_attachment, menu_item)
                 menu_item.Enable(not read_only)
+            else:
+                menu_item = popupmenu.Append(wx.ID_ANY, 'Show Info')
+                self.Bind(wx.EVT_MENU, self.attachments_info, menu_item)
 
         self.PopupMenu(popupmenu, event.GetPoint())
 
@@ -111,7 +120,22 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
 
     def database_info(self, event):
 
-        with DatabaseInfoDialog(self.root, self.database) as dialog:
+        with DatabaseInfoDialog(self.root, self.database, active_tab=0) as dialog:
+            dialog.ShowModal()
+
+    def tables_info(self, event):
+
+        with DatabaseInfoDialog(self.root, self.database, active_tab=0) as dialog:
+            dialog.ShowModal()
+
+    def batches_info(self, event):
+
+        with DatabaseInfoDialog(self.root, self.database, active_tab=1) as dialog:
+            dialog.ShowModal()
+
+    def attachments_info(self, event):
+
+        with DatabaseInfoDialog(self.root, self.database, active_tab=2) as dialog:
             dialog.ShowModal()
 
     def table_info(self, event):

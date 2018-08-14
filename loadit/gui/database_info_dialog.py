@@ -5,7 +5,7 @@ from loadit.misc import humansize
 
 class DatabaseInfoDialog(wx.Dialog):
 
-    def __init__(self, parent, database):
+    def __init__(self, parent, database, active_tab=0):
         super().__init__(parent)
         self.SetTitle('Database Info')
         self.SetSize((640, 480))
@@ -99,7 +99,7 @@ class DatabaseInfoDialog(wx.Dialog):
         panel.SetSizer(panel_sizer)
         notebook.AddPage(panel, 'Attachments ({})'.format(len(database.header.attachments)))
 
-        notebook.ChangeSelection(0)
+        notebook.ChangeSelection(active_tab)
         sizer.Add(notebook, 1, wx.ALL + wx.EXPAND, 5)
 
         self.SetSizer(sizer)
