@@ -740,7 +740,8 @@ class Database(object):
         print('Done!')
         return pa.RecordBatch.from_arrays(arrays, index_names + columns,
                                           metadata={b'index_columns': json.dumps(index_names).encode(),
-                                                    b'header': json.dumps(self.header.get_query_header()).encode()})
+                                                    b'header': json.dumps(self.header.get_query_header()).encode(),
+                                                    b'table': table.encode()})
 
 
 def process_field(field, basic_field, table, query_functions, geometry,
@@ -1159,9 +1160,13 @@ def write_query(record_batch, output_file):
 
     elif extension == '.xlsx':
         get_dataframe(record_batch, False).to_excel(output_file)
-            
     elif extension == '.parquet':
         pq.write_table(pa.Table.from_batches([record_batch]), output_file, version='2.0')
+    elif extension == '.db':
+        import sqlite3
+
+        with sqlite3.connect(output_file) as conn:
+            get_dataframe(record_batch, False).to_sql(record_batch.schema.metadata[b'table'].decode(), conn, index=False)
 
     print('Done!')
 

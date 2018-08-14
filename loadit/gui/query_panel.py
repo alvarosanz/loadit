@@ -376,7 +376,7 @@ class QueryPanel(wx.Panel):
         self._geometry_file.SetValue('')
 
     def select_output_file(self, event):
-        wildcard = 'CSV files (*.csv)|*.csv|EXCEL files (*.xlsx)|*.xlsx|PARQUET files (*.parquet)|*.parquet'
+        wildcard = 'CSV files (*.csv)|*.csv|EXCEL files (*.xlsx)|*.xlsx|PARQUET files (*.parquet)|*.parquet|SQLITE files (*.db)|*.db'
 
         with wx.FileDialog(self.root, 'Select output file', style=wx.FD_SAVE + wx.FD_OVERWRITE_PROMPT, wildcard=wildcard) as dialog:
     

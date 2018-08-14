@@ -34,13 +34,17 @@ class ResultsPanel(wx.Panel):
         self._results.update(record_batch)
 
     def save(self, event):
-        wildcard = 'CSV files (*.csv)|*.csv|EXCEL files (*.xlsx)|*.xlsx|PARQUET files (*.parquet)|*.parquet'
+        wildcard = 'CSV files (*.csv)|*.csv|EXCEL files (*.xlsx)|*.xlsx|PARQUET files (*.parquet)|*.parquet|SQLITE files (*.db)|*.db'
 
         with wx.FileDialog(self.root, 'Save output file', style=wx.FD_SAVE + wx.FD_OVERWRITE_PROMPT, wildcard=wildcard) as dialog:
     
             if dialog.ShowModal() == wx.ID_OK:
-                write_query(self.results, dialog.GetPath())
-                self.root.statusbar.SetStatusText('Results saved')
+
+                try:
+                    write_query(self.results, dialog.GetPath())
+                    self.root.statusbar.SetStatusText('Results saved')
+                except Exception as e:
+                    self.root.statusbar.SetStatusText(str(e))
 
     def copy_to_clipboard(self, event):
         self.root.statusbar.SetStatusText('Copying results to clipboard ...')
