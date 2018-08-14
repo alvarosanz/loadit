@@ -24,7 +24,7 @@ class TableInfoDialog(wx.Dialog):
         # Fields
         panel = wx.Panel(notebook, id=wx.ID_ANY)
         panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        fields = wx.ListCtrl(panel, wx.ID_ANY, style=wx.LC_REPORT)
+        fields = wx.ListCtrl(panel, wx.ID_ANY, style=wx.LC_REPORT + wx.LC_SINGLE_SEL)
         fields.InsertColumn(0, 'Field', width=100)
         fields.InsertColumn(1, 'Type', width=40)
         fields.InsertColumn(2, 'Size', width=80)
