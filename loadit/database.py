@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 import csv
 import json
+import zlib
 import binascii
 import shutil
 import numpy as np
@@ -544,7 +545,7 @@ class Database(object):
 
         with open(file) as f:
             query = parse_query(json.load(f), True)
-            
+
         record_batch =  self.query(**query, double_precision=double_precision)
 
         if query['output_file']:
@@ -738,10 +739,12 @@ class Database(object):
             arrays += [pa.array(data[field]) for field in data]
 
         print('Done!')
+        query = {'table': table, 'fields': fields, 'LIDs': LIDs, 'IDs': IDs, 'groups': groups,
+                 'geometry':geometry, 'double_precision': double_precision}
         return pa.RecordBatch.from_arrays(arrays, index_names + columns,
                                           metadata={b'index_columns': json.dumps(index_names).encode(),
                                                     b'header': json.dumps(self.header.get_query_header()).encode(),
-                                                    b'table': table.encode()})
+                                                    b'query': zlib.compress(json.dumps(query).encode())})
 
 
 def process_field(field, basic_field, table, query_functions, geometry,
@@ -1166,7 +1169,7 @@ def write_query(record_batch, output_file):
         import sqlite3
 
         with sqlite3.connect(output_file) as conn:
-            get_dataframe(record_batch, False).to_sql(record_batch.schema.metadata[b'table'].decode(), conn, index=False)
+            get_dataframe(record_batch, False).to_sql(json.loads(zlib.decompress(record_batch.schema.metadata[b'query']))['table'], conn, index=False)
 
     print('Done!')
 
