@@ -39,13 +39,19 @@ class MultipleQueryPanel(wx.Panel):
         self.update()
 
     def update(self):
-        
-        if self.queries:
-            self.clear_button.Enabled = True
-            self.query_button.Enabled = True
+
+        if self.database.header.tables:
+            self.Enabled = True
+            
+            if self.queries:
+                self.clear_button.Enabled = True
+                self.query_button.Enabled = True
+            else:
+                self.clear_button.Enabled = False
+                self.query_button.Enabled = False
+                
         else:
-            self.clear_button.Enabled = False
-            self.query_button.Enabled = False
+            self.Enabled = False
 
     def add_query(self, event):
 

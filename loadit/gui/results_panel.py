@@ -13,7 +13,7 @@ class ResultsPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(-1, 8)
 
-        panel = wx.Panel(self, style=wx.BORDER_SIMPLE)
+        panel = wx.Panel(self, style=wx.BORDER_THEME)
         self._results = RecordBatchTableGrid(panel)
         self._results.SetReadOnly(5,5, True)
         grid_sizer = wx.BoxSizer(wx.VERTICAL)
