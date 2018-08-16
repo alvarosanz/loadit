@@ -254,7 +254,7 @@ class DatabaseClient(BaseClient):
             return self.query(**parse_query(json.load(f), True), double_precision=double_precision)
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, double_precision=False, **kwargs):
+              geometry=None, sort_by_LID=True, double_precision=False, **kwargs):
         """
         Perform a query.
 
@@ -271,7 +271,7 @@ class DatabaseClient(BaseClient):
         print('Processing query...', end=' ')
         return self._request(request_type='query', table=table, fields=fields,
                              LIDs=LIDs, IDs=IDs, groups=groups,
-                             geometry=geometry,
+                             geometry=geometry, sort_by_LID=sort_by_LID,
                              double_precision=double_precision)['batch']
 
     def _request(self, **kwargs):

@@ -13,7 +13,7 @@ class QueryPanel(wx.Panel):
         self.parent = parent
         self.database = database
         self.results_panel = results_panel
-        
+
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(-1, 8)
 
@@ -61,6 +61,7 @@ class QueryPanel(wx.Panel):
         # LIDs
         self.LIDs_notebook = wx.Notebook(self)
         self.critical_LIDs = False
+        self.sort_by_LID = True
 
         # By LIDs tab
         panel = wx.Panel(self.LIDs_notebook, id=wx.ID_ANY)
@@ -73,7 +74,13 @@ class QueryPanel(wx.Panel):
         panel_sizer.Add(field_sizer, 1, wx.EXPAND)
         self._critical_LIDs = wx.CheckBox(panel, label='Critical Only')
         self._critical_LIDs.Bind(wx.EVT_CHECKBOX, self.update_critical_LIDs)
-        panel_sizer.Add(self._critical_LIDs, 0, wx.ALL + wx.EXPAND, 5)
+        field_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        field_sizer.Add(self._critical_LIDs, 0, wx.ALL + wx.EXPAND, 5)
+        self._sort_by_LID = wx.CheckBox(panel, label='Sort by LID')
+        self._sort_by_LID.SetValue(True)
+        self._sort_by_LID.Bind(wx.EVT_CHECKBOX, self.update_sort_by_LID)
+        field_sizer.Add(self._sort_by_LID, 0, wx.ALL + wx.EXPAND, 5)
+        panel_sizer.Add(field_sizer, 0, wx.EXPAND)
         panel.SetSizer(panel_sizer)
         self.LIDs_notebook.AddPage(panel, 'By LIDs')
 
@@ -94,7 +101,13 @@ class QueryPanel(wx.Panel):
         panel_sizer.Add(field_sizer, 1, wx.EXPAND)
         self._critical_LIDs2 = wx.CheckBox(panel, label='Critical Only')
         self._critical_LIDs2.Bind(wx.EVT_CHECKBOX, self.update_critical_LIDs)
-        panel_sizer.Add(self._critical_LIDs2, 0, wx.ALL + wx.EXPAND, 5)
+        field_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        field_sizer.Add(self._critical_LIDs2, 0, wx.ALL + wx.EXPAND, 5)
+        self._sort_by_LID2 = wx.CheckBox(panel, label='Sort by LID')
+        self._sort_by_LID2.SetValue(True)
+        self._sort_by_LID2.Bind(wx.EVT_CHECKBOX, self.update_sort_by_LID)
+        field_sizer.Add(self._sort_by_LID2, 0, wx.ALL + wx.EXPAND, 5)
+        panel_sizer.Add(field_sizer, 0, wx.EXPAND)
         panel.SetSizer(panel_sizer)
         self.LIDs_notebook.AddPage(panel, 'By Combinations')
         self.LIDs_notebook.ChangeSelection(0)
@@ -121,7 +134,7 @@ class QueryPanel(wx.Panel):
                 fields_column_sizer.Add(field_sizer, 0, wx.ALL + wx.EXPAND, 1)
                 self._fields[field] = aggregation
                 self._aggregations[aggregation] = [field, None, None]
-            
+
             fields_sizer.Add(fields_column_sizer, 0, wx.LEFT + wx.RIGHT + wx.EXPAND, 10)
 
         sizer.Add(fields_sizer, 0, wx.ALL + wx.EXPAND, 5)
@@ -186,6 +199,16 @@ class QueryPanel(wx.Panel):
         self.update_fields(event)
 
     def update_fields(self, event):
+
+        if self.critical_LIDs:
+            self.sort_by_LID = None
+            self._sort_by_LID.Enabled = False
+            self._sort_by_LID2.Enabled = False
+        else:
+            self.sort_by_LID = self._sort_by_LID.IsChecked()
+            self._sort_by_LID.Enabled = True
+            self._sort_by_LID2.Enabled = True
+
         self.root.Freeze()
 
         if self.database.header.tables:
@@ -223,16 +246,16 @@ class QueryPanel(wx.Panel):
                 field = self._aggregations[aggregation][0]
                 self.set_field(field, aggregation, by_id, fields, False)
             else:
-        
+
                 for field, aggregation in self._fields.items():
                     self.set_field(field, aggregation, by_id, fields, True)
-                
+
         else:
             self.Enabled = False
 
         self.update_buttons(event)
         self.root.Thaw()
-            
+
         if event:
             event.Skip()
 
@@ -269,10 +292,10 @@ class QueryPanel(wx.Panel):
                             aggregation.SetSelection(0)
                         else:
                             aggregation.SetSelection(self._aggregations[aggregation][2])
-                    
+
                     self._aggregations[aggregation][2] = aggregation.GetSelection()
             else: # By group
-                
+
                 if not self.critical_LIDs: # All LIDs
 
                     if reset_aggregation:
@@ -313,13 +336,17 @@ class QueryPanel(wx.Panel):
                         self._aggregations[aggregation][2] = 0
                     else:
                         self._aggregations[aggregation][2] = 1
-                    
+
     def update_critical_LIDs(self, event):
         self.critical_LIDs = event.GetEventObject().IsChecked()
-
         self._critical_LIDs.SetValue(self.critical_LIDs)
         self._critical_LIDs2.SetValue(self.critical_LIDs)
         self.update_fields(event)
+
+    def update_sort_by_LID(self, event):
+        self.sort_by_LID = event.GetEventObject().IsChecked()
+        self._sort_by_LID.SetValue(self.sort_by_LID)
+        self._sort_by_LID2.SetValue(self.sort_by_LID)
 
     def update_buttons(self, event):
 
@@ -353,17 +380,17 @@ class QueryPanel(wx.Panel):
     def select_groups_file(self, event):
 
         with wx.FileDialog(self.root, 'Select group file', style=wx.FD_DEFAULT_STYLE, wildcard='CSV files (*.csv)|*.csv') as dialog:
-    
+
             if dialog.ShowModal() == wx.ID_OK:
                 self._groups_file.SetValue(dialog.GetPath())
-    
+
     def clear_groups_file(self, event):
         self._groups_file.SetValue('')
 
     def select_LIDs_file(self, event):
 
         with wx.FileDialog(self.root, 'Select LIDs file', style=wx.FD_DEFAULT_STYLE, wildcard='CSV files (*.csv)|*.csv') as dialog:
-    
+
             if dialog.ShowModal() == wx.ID_OK:
                 self._LIDs_file.SetValue(dialog.GetPath())
 
@@ -373,7 +400,7 @@ class QueryPanel(wx.Panel):
     def select_geometry_file(self, event):
 
         with wx.FileDialog(self.root, 'Select geometry file', style=wx.FD_DEFAULT_STYLE, wildcard='CSV files (*.csv)|*.csv') as dialog:
-    
+
             if dialog.ShowModal() == wx.ID_OK:
                 self._geometry_file.SetValue(dialog.GetPath())
 
@@ -384,7 +411,7 @@ class QueryPanel(wx.Panel):
         wildcard = 'CSV files (*.csv)|*.csv|EXCEL files (*.xlsx)|*.xlsx|PARQUET files (*.parquet)|*.parquet|SQLITE files (*.db)|*.db'
 
         with wx.FileDialog(self.root, 'Select output file', style=wx.FD_SAVE + wx.FD_OVERWRITE_PROMPT, wildcard=wildcard) as dialog:
-    
+
             if dialog.ShowModal() == wx.ID_OK:
                 self._output_file.SetValue(dialog.GetPath())
 
@@ -394,13 +421,13 @@ class QueryPanel(wx.Panel):
     def save_query(self, event):
 
         with wx.FileDialog(self.root, 'Save query file', style=wx.FD_SAVE + wx.FD_OVERWRITE_PROMPT, wildcard='JSON files (*.json)|*.json') as dialog:
-    
+
             if dialog.ShowModal() == wx.ID_OK:
                 query = self.get_query(parse=False)
-                
+
                 with open(dialog.GetPath(), 'w') as f:
                     json.dump(query, f, indent=4)
-                
+
                 self.root.statusbar.SetStatusText('Query saved')
 
     def do_query(self, event):
@@ -421,7 +448,7 @@ class QueryPanel(wx.Panel):
 
         for field, aggregation in self._fields.items():
             field_value = field.GetString(field.GetSelection())
-            
+
             if field_value:
 
                 if aggregation.GetString(aggregation.GetSelection()):
@@ -442,6 +469,10 @@ class QueryPanel(wx.Panel):
             query['groups'] = self._groups_file.GetValue()
 
         query['geometry'] = self._geometry_file.GetValue()
+
+        if not self.sort_by_LID is None:
+            query['sort_by_LID'] = self.sort_by_LID
+
         parsed_query = parse_query(query, True)
 
         try:

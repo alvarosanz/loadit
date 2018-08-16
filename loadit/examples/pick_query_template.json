@@ -1,6 +1,6 @@
 {
     "path": "new_foo",
-    "output_file": "/Users/Alvaro/Desktop/results.csv",
+    "output_file": "",
     "table": "ELEMENT FORCES - QUAD4 (33)",
     "fields": [
         "NX",
@@ -14,5 +14,6 @@
     "LIDs": "",
     "IDs": "",
     "groups": "",
-    "geometry": ""
+    "geometry": "",
+    "sort_by_LID": true
 }

@@ -554,7 +554,7 @@ class Database(object):
         return record_batch
 
     def query(self, table=None, fields=None, LIDs=None, IDs=None, groups=None,
-              geometry=None, double_precision=False, **kwargs):
+              geometry=None, sort_by_LID=True, double_precision=False, **kwargs):
         """
         Perform a query.
 
@@ -704,27 +704,26 @@ class Database(object):
 
         # RecordBatch creation
         from loadit.queries import set_index
+        order = 'C' if sort_by_LID else 'F'
 
         if mem_handler.level == 0:
             index_names = [self.header.tables[table]['columns'][0][0],
                            self.header.tables[table]['columns'][1][0]]
             columns = mem_handler.fields[0]
-            data = mem_handler.data0.reshape((len(fields), len(LIDs_queried) * len(IDs_queried))).T
             index0 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
             index1 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
             set_index(LIDs_queried, IDs_queried, index0, index1)
-            arrays = [pa.array(index0.ravel()), pa.array(index1.ravel())]
-            arrays += [pa.array(data[:, i]) for i in range(len(fields))]
+            arrays = [pa.array(index0.ravel(order)), pa.array(index1.ravel(order))]
+            arrays += [pa.array(mem_handler.data0[i, :, :].ravel(order)) for i in range(len(fields))]
         elif mem_handler.level == 1:
             index_names = [self.header.tables[table]['columns'][0][0], 'Group']
             columns = mem_handler.fields[1]
-            data = mem_handler.data1.reshape((len(fields), len(LIDs_queried) * len(groups))).T
             index0 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
             index1 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
             set_index(LIDs_queried, np.arange(len(groups), dtype=np.int64), index0, index1)
-            arrays = [pa.array(index0.ravel()),
-                        pa.DictionaryArray.from_arrays(pa.array(index1.ravel()), pa.array(list(groups)))]
-            arrays += [pa.array(data[:, i]) for i in range(len(fields))]
+            arrays = [pa.array(index0.ravel(order)),
+                      pa.DictionaryArray.from_arrays(pa.array(index1.ravel(order)), pa.array(list(groups)))]
+            arrays += [pa.array(mem_handler.data1[i, :, :].ravel(order)) for i in range(len(fields))]
         else:
             index_names = ['Group'] if groups else [self.header.tables[table]['columns'][1][0]]
             columns = [field + suffix for field in mem_handler.fields[2] for suffix in ('', LID_suffix)]
@@ -740,7 +739,7 @@ class Database(object):
 
         print('Done!')
         query = {'table': table, 'fields': fields, 'LIDs': LIDs, 'IDs': IDs, 'groups': groups,
-                 'geometry':geometry, 'double_precision': double_precision}
+                 'geometry':geometry, 'sort_by_LID': sort_by_LID, 'double_precision': double_precision}
         return pa.RecordBatch.from_arrays(arrays, index_names + columns,
                                           metadata={b'index_columns': json.dumps(index_names).encode(),
                                                     b'header': json.dumps(self.header.get_query_header()).encode(),
@@ -1233,7 +1232,7 @@ def parse_query(query, parse_files=False):
             query['geometry'] = {field: {int(row[0]): float(row[i + 1]) for row in rows} for i, field in
                                 enumerate(rows[0][1:])}
 
-    query = {key: value if value else None for key, value in query.items()}
+    query = {key: value if value or type(value) is bool else None for key, value in query.items()}
 
     # Convert string dict keys to int keys
     for field in ('LIDs', 'geometry'):
