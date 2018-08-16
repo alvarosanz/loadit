@@ -353,7 +353,9 @@ class CentralServer(DatabaseServer):
                 self.sessions = Sessions(sessions_file, password)
 
         manager = Manager()
-        start_workers(self.server_address, self.root_path, manager, 'admin', password,
+        databases = manager.dict(self.databases)
+        locked_databases = manager.dict()
+        start_workers(self.server_address, self.root_path, manager, 'admin', password, databases, locked_databases,
                       n_workers=cpu_count() - 1, debug=self._debug)
         print('Address: {}:{}'.format(*self.server_address))
         self.serve_forever()
@@ -689,16 +691,14 @@ def start_worker(server_address, central_address, root_path,
     worker.start(user, password)
 
 
-def start_workers(central_address, root_path, manager, user, password,
+def start_workers(central_address, root_path, manager, user, password, databases, locked_databases,
                   n_workers=None, backup=False, debug=False):
 
     if not n_workers:
         n_workers = cpu_count()
 
-    databases = manager.dict(get_local_databases(root_path))
     main_lock = Lock()
     locks = [Lock() for lock in range(n_workers)]
-    locked_databases = manager.dict()
     host = get_ip()
     workers = list()
 
@@ -715,7 +715,9 @@ def start_node(central_address, root_path, backup=False, debug=False):
     user = input('user: ')
     password = getpass.getpass('password: ')
     manager = Manager()
-    workers = start_workers(central_address, root_path, manager, user, password,
+    databases = manager.dict(get_local_databases(root_path))
+    locked_databases = manager.dict()
+    workers = start_workers(central_address, root_path, manager, user, password, databases, locked_databases,
                             backup=backup, debug=debug)
 
     for worker in workers:
