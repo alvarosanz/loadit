@@ -1,5 +1,6 @@
 import sys
 import wx
+import re
 
 
 class CustomStatusBar(wx.StatusBar):
@@ -9,6 +10,7 @@ class CustomStatusBar(wx.StatusBar):
         self.parent = parent
         self.SetFieldsCount(2)
         self.SetStatusWidths([-4, -1])
+        self.exclude_pattern = re.compile('^[\s\n]*$')
 
         # Set up the status label
         self.status_label = wx.StaticText(self, -1, '')
@@ -52,7 +54,6 @@ class CustomStatusBar(wx.StatusBar):
 
     def write(self, msg):
 
-        if msg != '\n':
+        if not self.exclude_pattern.search(msg):
             self.SetStatusText(msg.replace('\n', '; '))
-
-        wx.Yield()
+            wx.Yield()
