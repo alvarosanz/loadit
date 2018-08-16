@@ -329,27 +329,33 @@ class CentralServer(DatabaseServer):
         self.nodes = dict()
 
     def start(self, sessions_file=None):
-        password = getpass.getpass('password: ')
 
         if sessions_file:
+            password = getpass.getpass('password: ')
             self.sessions = Sessions(sessions_file)
         else:
             sessions_file = os.path.join(self.root_path, 'sessions.json')
 
             if os.path.exists(sessions_file):
+                password = getpass.getpass('password: ')
                 self.sessions = Sessions(sessions_file)
             else:
-                self.sessions = Sessions(sessions_file, password)
 
-        try:
-            self.sessions.get_session('admin', password)
-        except KeyError:
-            raise PermissionError('Wrong password!')
+                while True:
+                    password = getpass.getpass('password: ')
+                    password_confirm = getpass.getpass('confirm password: ')
+
+                    if password == password_confirm:
+                        break
+                    else:
+                        print('Password does not match the confirm password. Please enter it again:')
+
+                self.sessions = Sessions(sessions_file, password)
 
         manager = Manager()
         start_workers(self.server_address, self.root_path, manager, 'admin', password,
                       n_workers=cpu_count() - 1, debug=self._debug)
-        print("Address: '{}:{}'".format(*self.server_address))
+        print('Address: {}:{}'.format(*self.server_address))
         self.serve_forever()
         print('Cluster shutdown')
 

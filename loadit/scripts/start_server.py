@@ -1,7 +1,6 @@
 import os
 import argparse
 from multiprocessing import freeze_support
-import loadit
 
 
 if __name__ == '__main__':
@@ -16,5 +15,8 @@ if __name__ == '__main__':
                         help='activate debug mode')
     args = parser.parse_args()
 
+    import loadit
     server = loadit.CentralServer(args.root_path, args.debug)
     server.start(args.sessions_file)
+else:
+    import loadit
