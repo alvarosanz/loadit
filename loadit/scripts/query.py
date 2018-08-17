@@ -1,7 +1,6 @@
 import os
 import time
 import argparse
-import loadit
 
 
 if __name__ == '__main__':
@@ -14,6 +13,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    import loadit
     client = loadit.Client()
 
     if args.server_address:
@@ -32,3 +32,5 @@ if __name__ == '__main__':
         database.query_from_file(file)
 
     print(f"{time.time() - start_time} seconds")
+else:
+    import loadit
