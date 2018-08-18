@@ -1,5 +1,4 @@
 import hashlib
-import sys
 
 
 suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -54,22 +53,3 @@ def get_hasher(hash_type):
 def get_hash(value):
     hasher = hashlib.sha256(value.encode())
     return hasher.hexdigest()
-
-
-class LoggerWriter(object):
-
-    def __init__(self, level):
-        self.level = level
-
-    def write(self, message):
-        # if statement reduces the amount of newlines that are
-        # printed to the logger
-        if message != '\n':
-            self.level(message)
-
-    def flush(self):
-        # create a flush method so things can be flushed when
-        # the system wants to. Not sure if simply 'printing'
-        # sys.stderr is the correct way to do it, but it seemed
-        # to work properly for me.
-        self.level(sys.stderr)

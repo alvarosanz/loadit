@@ -11,6 +11,10 @@ import numpy as np
 from io import BytesIO
 from loadit.misc import humansize
 from loadit.read_results import tables_in_pch, ResultsTable
+import logging
+
+
+log = logging.getLogger()
 
 
 class Connection(object):
@@ -89,14 +93,14 @@ class Connection(object):
         ignored_tables = set()
 
         for i, file in enumerate(files):
-            print(f"Transferring file {i + 1} of {len(files)} ({humansize(os.path.getsize(file))}): '{os.path.basename(file)}'...")
+            log.info(f"Transferring file {i + 1} of {len(files)} ({humansize(os.path.getsize(file))}): '{os.path.basename(file)}'...")
 
             for table in tables_in_pch(file, tables_specs):
 
                 if table.name not in tables_specs:
 
                     if table.name not in ignored_tables:
-                        print("WARNING: '{}' is not supported!".format(table.name))
+                        log.warning("WARNING: '{}' is not supported!".format(table.name))
                         ignored_tables.add(table.name)
 
                     continue

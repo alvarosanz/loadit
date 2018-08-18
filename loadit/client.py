@@ -6,7 +6,11 @@ import time
 import pyarrow as pa
 from loadit.database import DatabaseHeader, Database, create_database, parse_query
 from loadit.connection import Connection, get_private_key
-from loadit.misc import get_hash
+from loadit.misc import get_hash, humansize
+import logging
+
+
+log = logging.getLogger()
 
 
 class BaseClient(object):
@@ -81,24 +85,24 @@ class BaseClient(object):
 
                 while data['msg'] != 'Done!':
                     data = connection.recv()
-                    print(data['msg'])
+                    log.info(data['msg'])
 
             elif kwargs['request_type'] == 'new_batch':
                 connection.send_tables(kwargs['files'], data)
-                print('Assembling database...')
+                log.info('Assembling database...')
                 data = connection.recv()
             elif kwargs['request_type'] == 'query':
-                print('Done!')
-                print(data['msg'], end=' ')
+                log.info('Done!')
+                log.info(data['msg'])
                 reader = pa.RecordBatchStreamReader(pa.BufferReader(connection.recv().getbuffer()))
-                print('Done!')
+                log.info('Done!')
                 data['batch'] = reader.read_next_batch()
             elif kwargs['request_type'] == 'add_attachment':
-                print(data['msg'])
+                log.info(f"Transferring '{os.path.basename(kwargs['file'])}' ({humansize(os.path.getsize(kwargs['file']))})...")
                 connection.send_file(kwargs['file'])
                 data = connection.recv()
             elif kwargs['request_type'] == 'download_attachment':
-                print(data['msg'])
+                log.info(data['msg'])
                 connection.recv_file(os.path.join(kwargs['output_path'], kwargs['name']))
                 data = connection.recv()
 
@@ -174,7 +178,7 @@ class DatabaseClient(BaseClient):
         file : str
             Attachment file path.
         """
-        print(self._request(request_type='add_attachment', file=file)['msg'])
+        log.info(self._request(request_type='add_attachment', file=file)['msg'])
 
     def remove_attachment(self, name):
         """
@@ -185,7 +189,7 @@ class DatabaseClient(BaseClient):
         name : str
             Attachment name.
         """
-        print(self._request(request_type='remove_attachment', name=name)['msg'])
+        log.info(self._request(request_type='remove_attachment', name=name)['msg'])
 
     def download_attachment(self, name, path):
         """
@@ -198,7 +202,7 @@ class DatabaseClient(BaseClient):
         path : str
             Output path.
         """
-        print(self._request(request_type='download_attachment', name=name, output_path=path)['msg'])
+        log.info(self._request(request_type='download_attachment', name=name, output_path=path)['msg'])
 
     def new_batch(self, files, batch_name, comment=''):
         """
@@ -213,8 +217,8 @@ class DatabaseClient(BaseClient):
         comment : str
             Batch comment.
         """
-        print(self._request(request_type='new_batch', files=files,
-                            batch=batch_name, comment=comment)['msg'])
+        log.info(self._request(request_type='new_batch', files=files,
+                               batch=batch_name, comment=comment)['msg'])
 
     def restore(self, batch_name):
         """
@@ -230,8 +234,8 @@ class DatabaseClient(BaseClient):
         if batch_name not in restore_points or batch_name == restore_points[-1]:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
-        print('Restoring database...')
-        print(self._request(request_type='restore_database', batch=batch_name)['msg'])
+        log.info('Restoring database...')
+        log.info(self._request(request_type='restore_database', batch=batch_name)['msg'])
 
     def query_from_file(self, file, double_precision=False):
         """
@@ -268,7 +272,7 @@ class DatabaseClient(BaseClient):
         pyarrow.RecordBatch
             Data queried.
         """
-        print('Processing query...', end=' ')
+        log.info('Processing query...')
         return self._request(request_type='query', table=table, fields=fields,
                              LIDs=LIDs, IDs=IDs, groups=groups,
                              geometry=geometry, sort_by_LID=sort_by_LID,
@@ -301,7 +305,7 @@ class Client(BaseClient):
         host, port = server_address.split(':')
         self.server_address = (host, int(port))
         self._request(request_type='authentication', user=user, password=password)
-        print('Logged in')
+        log.info('Logged in')
 
     @property
     def session(self):
@@ -325,12 +329,12 @@ class Client(BaseClient):
 
     def create_remote_database(self, database):
         data = self._request(is_redirected=True, request_type='create_database', path=database)
-        print(data['msg'])
+        log.info(data['msg'])
         return DatabaseClient(self.server_address, database,
                               self._private_key, self._authentication, data['header'])
 
     def remove_remote_database(self, database):
-        print(self._request(request_type='remove_database', path=database)['msg'])
+        log.info(self._request(request_type='remove_database', path=database)['msg'])
 
     @property
     def remote_databases(self):
@@ -341,14 +345,14 @@ class Client(BaseClient):
         return self._request(request_type='list_sessions')['sessions']
 
     def add_session(self, user, password, is_admin=False, create_allowed=False, databases=None):
-        print(self._request(request_type='add_session', session_hash=get_hash(f'{user}:{password}'),
-                            user=user, is_admin=is_admin, create_allowed=create_allowed, databases=databases)['msg'])
+        log.info(self._request(request_type='add_session', session_hash=get_hash(f'{user}:{password}'),
+                               user=user, is_admin=is_admin, create_allowed=create_allowed, databases=databases)['msg'])
 
     def remove_session(self, user):
-        print(self._request(request_type='remove_session', user=user)['msg'])
+        log.info(self._request(request_type='remove_session', user=user)['msg'])
 
     def sync_databases(self, nodes=None, databases=None):
         self._request(request_type='sync_databases', nodes=nodes, databases=databases)
 
     def shutdown(self, node=None):
-        print(self._request(request_type='shutdown', node=node)['msg'])
+        log.info(self._request(request_type='shutdown', node=node)['msg'])

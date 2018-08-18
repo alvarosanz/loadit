@@ -1,6 +1,10 @@
 import wx
 import os
 from loadit.misc import humansize
+import logging
+
+
+log = logging.getLogger()
 
 
 class NewBatchDialog(wx.Dialog):
@@ -126,12 +130,12 @@ class NewBatchDialog(wx.Dialog):
     def do_queries(self, event):
         
         for i, query_file in enumerate(self.files):
-            self.root.statusbar.SetStatusText(f"Performing query '{os.path.basename(query_file)}' ({i + 1} of {len(self.files)})...")
+            log.info(f"Performing query '{os.path.basename(query_file)}' ({i + 1} of {len(self.files)})...")
             self._files.SetItem(i, 2, 'In progress ...')
             self.database.query_from_file(query_file)
             self._files.SetItem(i, 2, 'Done')
 
-        self.root.statusbar.SetStatusText('Done!')
+        log.info('Done!')
 
     def show_menu(self, event):
 

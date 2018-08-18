@@ -13,6 +13,10 @@ from loadit.table_data import TableData
 from loadit.tables_specs import get_tables_specs
 from loadit.database_creation import create_tables, assembly_database, open_table, create_database_header
 from loadit.misc import humansize, get_hasher, hash_bytestr
+import logging
+
+
+log = logging.getLogger()
 
 
 class DatabaseHeader(object):
@@ -226,7 +230,7 @@ def create_database(database_path, overwrite=False):
     Path(database_path).mkdir(parents=True, exist_ok=overwrite)
     (Path(database_path) / '.attachments').mkdir(exist_ok=overwrite)
     assembly_database(database_path, dict(), list())
-    print('Database created')
+    log.info('Database created')
     database = Database(database_path)
     database.load()
     return database
@@ -395,7 +399,7 @@ class Database(object):
                                              os.path.getsize(attachment_file)]
 
         self._write_header()
-        print('Attachment added')
+        log.info('Attachment added')
 
     def remove_attachment(self, name):
         """
@@ -413,7 +417,7 @@ class Database(object):
         os.remove(os.path.join(self.path, '.attachments', name))
         del self.header.attachments[name]
         self._write_header()
-        print('Attachment removed')
+        log.info('Attachment removed')
 
     def download_attachment(self, name, path):
         """
@@ -432,7 +436,7 @@ class Database(object):
 
         shutil.copyfile(os.path.join(self.path, '.attachments', name),
                         os.path.join(path))
-        print('Attachment downloaded')
+        log.info('Attachment downloaded')
 
     def new_batch(self, files, batch_name, comment='', table_generator=None):
         """
@@ -468,12 +472,12 @@ class Database(object):
             self.restore(self.header.batches[-1][0])
             raise e
 
-        print('Assembling database...')
+        log.info('Assembling database...')
         self.header.batches.append([batch_name, None, None, [os.path.basename(file) for file in files], comment])
         assembly_database(self.path, self.header.tables, self.header.batches,
                           self.max_memory, self.header.hash_function, self.header.attachments)
         self.load()
-        print('New batch created')
+        log.info('New batch created')
 
     def restore(self, batch_name):
         """
@@ -489,7 +493,7 @@ class Database(object):
         if batch_name not in restore_points:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
-        print('Restoring database...')
+        log.info('Restoring database...')
         self._close()
         batch_index = 0
 
@@ -524,7 +528,7 @@ class Database(object):
         if self.header.batches[-1][1] != batch_hash_old:
             raise ValueError('Database header is corrupted!')
 
-        print('Database restored')
+        log.info('Database restored')
 
     def query_from_file(self, file, double_precision=False):
         """
@@ -569,7 +573,7 @@ class Database(object):
             Data queried.
         """
         from loadit.queries import query_functions
-        print('Processing query...', end=' ')
+        log.info('Processing query...')
 
         try:
             query_functions = query_functions[table]
@@ -737,7 +741,7 @@ class Database(object):
 
             arrays += [pa.array(data[field]) for field in data]
 
-        print('Done!')
+        log.info('Done!')
         query = {'table': table, 'fields': fields, 'LIDs': LIDs, 'IDs': IDs, 'groups': groups,
                  'geometry':geometry, 'sort_by_LID': sort_by_LID, 'double_precision': double_precision}
         return pa.RecordBatch.from_arrays(arrays, index_names + columns,
@@ -1151,7 +1155,7 @@ def write_query(record_batch, output_file):
     output_file : str
         Output file (*.csv, *.xlsx or *.parquet).
     """
-    print(f"Writing '{output_file}'...", end=' ')
+    log.info(f"Writing '{output_file}'...")
     _, extension = os.path.splitext(output_file)
 
     if extension == '.csv':
@@ -1170,7 +1174,7 @@ def write_query(record_batch, output_file):
         with sqlite3.connect(output_file) as conn:
             get_dataframe(record_batch, False).to_sql(json.loads(zlib.decompress(record_batch.schema.metadata[b'query']))['table'], conn, index=False)
 
-    print('Done!')
+    log.info('Done!')
 
 
 def truncate_file(file, offset):

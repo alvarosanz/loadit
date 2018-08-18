@@ -7,6 +7,11 @@ from loadit.client import Client
 from loadit.gui.statusbar import CustomStatusBar
 from loadit.gui.connect_dialog import ConnectDialog
 from loadit.gui.database_tab import DatabaseTab
+import loadit.log
+import logging
+
+
+log = logging.getLogger()
 
 
 class MainWindow(wx.Frame):
@@ -20,7 +25,8 @@ class MainWindow(wx.Frame):
         # Statusbar
         self.statusbar = CustomStatusBar(self)
         self.SetStatusBar(self.statusbar)
-        sys.stdout = self.statusbar # Redirect stdout to statusbar
+        loadit.log.add_handler(logging.StreamHandler(self.statusbar), format='%(message)s')
+        loadit.log.disable_console()
 
         # Menubar
         self.menubar = wx.MenuBar()
@@ -105,9 +111,9 @@ class MainWindow(wx.Frame):
             if not is_local:
                 self.remote_tabs.append(tab)
 
-            self.statusbar.SetStatusText(msg)
+            log.info(msg)
         except Exception as e:
-            self.statusbar.SetStatusText(str(e))
+            log.error(str(e))
 
     def on_new(self, event):
 
@@ -136,7 +142,7 @@ class MainWindow(wx.Frame):
         except ValueError:
             pass
 
-        self.statusbar.SetStatusText('Database closed')
+        log.info('Database closed')
 
     def on_connect(self, event):
 
@@ -145,11 +151,11 @@ class MainWindow(wx.Frame):
             if dialog.ShowModal() == wx.ID_OK:
 
                 try:
-                    self.statusbar.SetStatusText('Connecting...')
+                    log.info('Connecting...')
                     self.client.connect(dialog.address, dialog.user, dialog.password)
                     self.statusbar.update_status()
                 except Exception as e:
-                    self.StatusBar.SetStatusText(str(e))
+                    lof.error(str(e))
 
     def on_disconnect(self, event):
         self.client._authentication = None
@@ -158,7 +164,7 @@ class MainWindow(wx.Frame):
             self.notebook.DeletePage(self.notebook.GetPageIndex(tab))
 
         self.remote_tabs = list()
-        self.statusbar.SetStatusText('Logged out')
+        log.info('Logged out')
         self.statusbar.update_status()
 
     def on_new_remote(self, event):

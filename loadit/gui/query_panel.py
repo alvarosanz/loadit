@@ -3,6 +3,10 @@ import os
 import re
 import json
 from loadit.database import parse_query, write_query, check_query
+import logging
+
+
+log = logging.getLogger()
 
 
 class QueryPanel(wx.Panel):
@@ -428,7 +432,7 @@ class QueryPanel(wx.Panel):
                 with open(dialog.GetPath(), 'w') as f:
                     json.dump(query, f, indent=4)
 
-                self.root.statusbar.SetStatusText('Query saved')
+                log.info('Query saved')
 
     def do_query(self, event):
         query = self.get_query(parse=True)
@@ -478,7 +482,7 @@ class QueryPanel(wx.Panel):
         try:
             check_query(parsed_query, self.database.header)
         except ValueError as e:
-            self.root.statusbar.SetStatusText(str(e))
+            log.error(str(e))
             raise e
 
         if parse:

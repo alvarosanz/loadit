@@ -6,6 +6,10 @@ from loadit.gui.new_batch_dialog import NewBatchDialog
 from loadit.gui.database_info_dialog import DatabaseInfoDialog
 from loadit.gui.table_info_dialog import TableInfoDialog
 from loadit.gui.check_dialog import CheckDialog
+import logging
+
+
+log = logging.getLogger()
 
 
 class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
@@ -148,13 +152,13 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
             dialog.ShowModal()
 
     def check(self, event):
-        self.root.statusbar.SetStatusText('Checking integrity...')
+        log.info('Checking integrity...')
         check_summary = self.database.check(print_to_screen=False)
         
         if check_summary == 'Everything is OK!':
-            self.root.statusbar.SetStatusText(check_summary)
+            log.info(check_summary)
         else:
-            self.root.statusbar.SetStatusText('There are corrupted file/s!')
+            log.warning('There are corrupted file/s!')
 
             with CheckDialog(self.root, check_summary) as dialog:
                 dialog.ShowModal()
@@ -169,7 +173,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                     self.database.new_batch(dialog.files, dialog.name, dialog.comment)
                     self.parent.update()
                 except Exception as e:
-                    self.root.statusbar.SetStatusText(str(e))
+                    log.error(str(e))
 
     def restore(self, event):
         batch = self.GetSelection().GetText()
@@ -185,7 +189,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                     self.database.restore(batch)
                     self.parent.update()
                 except Exception as e:
-                    self.root.statusbar.SetStatusText(str(e))
+                    log.error(str(e))
 
     def add_attachment(self, event):
         
@@ -197,7 +201,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                     self.database.add_attachment(dialog.GetPath())
                     self.update()
                 except Exception as e:
-                    self.root.statusbar.SetStatusText(str(e))
+                    log.error(str(e))
 
     def download_attachment(self, event):
         attachment = self.GetSelection().GetText()
@@ -211,7 +215,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                     self.database.download_attachment(attachment, dialog.GetPath())
                     self.update()
                 except Exception as e:
-                    self.root.statusbar.SetStatusText(str(e))
+                    log.error(str(e))
 
     def remove_attachment(self, event):
 
@@ -223,4 +227,4 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                     self.database.remove_attachment(self.GetSelection().GetText())
                     self.update()
                 except Exception as e:
-                    self.root.statusbar.SetStatusText(str(e))
+                    lof.error(str(e))

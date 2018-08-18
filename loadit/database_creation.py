@@ -5,6 +5,10 @@ import numpy as np
 from loadit.read_results import tables_in_pch
 from loadit.tables_specs import get_tables_specs
 from loadit.misc import get_hasher, hash_bytestr, humansize
+import logging
+
+
+log = logging.getLogger()
 
 
 def create_tables(database_path, files, headers, tables_specs=None,
@@ -18,7 +22,7 @@ def create_tables(database_path, files, headers, tables_specs=None,
         def table_generator(files, tables_specs):
 
             for i, file in enumerate(files):
-                print(f"Processing file {i + 1} of {len(files)} ({humansize(os.path.getsize(file))}): '{os.path.basename(file)}'...")
+                log.info(f"Processing file {i + 1} of {len(files)} ({humansize(os.path.getsize(file))}): '{os.path.basename(file)}'...")
 
                 for table in tables_in_pch(file, tables_specs):
                     yield table
@@ -34,7 +38,7 @@ def create_tables(database_path, files, headers, tables_specs=None,
             if table.name not in tables_specs:
 
                 if table.name not in ignored_tables:
-                    print("WARNING: '{}' is not supported!".format(table.name))
+                    log.warning("WARNING: '{}' is not supported!".format(table.name))
                     ignored_tables.add(table.name)
 
                 continue
@@ -89,7 +93,7 @@ def append_to_table(table, header):
     LID = table.data[LID_label][0]
 
     if LID in header['LIDs']:
-        print("WARNING: Subcase already in the database! It will be skipped (LID: {}, table: '{}')".format(LID, header['name']))
+        log.warning("WARNING: Subcase already in the database! It will be skipped (LID: {}, table: '{}')".format(LID, header['name']))
         return False
 
     IDs = table.data[ID_label]
@@ -109,7 +113,7 @@ def append_to_table(table, header):
         indexes = {header['iIDs'][ID]: i for i, ID in enumerate(IDs) if ID in header['iIDs']}
 
         if len(indexes) < len(header['IDs']) or len(IDs) != len(header['IDs']):
-            print("WARNING: Inconsistent {}/s (LID: {}, table: '{}')".format(ID_label, LID, header['name']))
+            log.warning("WARNING: Inconsistent {}/s (LID: {}, table: '{}')".format(ID_label, LID, header['name']))
 
         for field, dtype in header['columns'][2:]:
             field_array = np.full(len(header['IDs']), np.nan, dtype=dtype)
@@ -198,7 +202,7 @@ def create_table_header(header, batch_name, hash_function):
             if check:
 
                 if header['batches'][-1][2][field + '.bin'] != hash_bytestr(f, get_hasher(hash_function)):
-                    print(f"ERROR: '{os.path.join(header['path'], field + '.bin')} is corrupted!'")
+                    log.error(f"ERROR: '{os.path.join(header['path'], field + '.bin')} is corrupted!'")
 
             else:
                 header['batches'][-1][2][field + '.bin'] = hash_bytestr(f, get_hasher(hash_function))

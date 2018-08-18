@@ -18,7 +18,8 @@ from loadit.database import Database, create_database, parse_query
 from loadit.sessions import Sessions
 from loadit.tables_specs import get_tables_specs
 from loadit.connection import Connection, get_master_key, get_private_key, get_ip, find_free_port
-from loadit.misc import humansize, LoggerWriter, get_hasher, hash_bytestr
+import loadit.log as log
+from loadit.misc import humansize, get_hasher, hash_bytestr
 
 
 SERVER_PORT = 8080
@@ -63,7 +64,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
                 connection.send(msg={'msg': 'Cluster shutdown'})
 
         elif query['request_type'] == 'cluster_info':
-            connection.send(msg={'msg': self.server.info(print_to_screen=False)})
+            connection.send(msg={'msg': self.server.info()})
         elif query['request_type'] == 'add_session':
             self.server.sessions.add_session(query['user'], session_hash=query['session_hash'],
                                              is_admin=query['is_admin'],
@@ -152,7 +153,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                         raise FileExistsError(f"Already existing attachment!")
 
                     attachment_file = os.path.join(path, '.attachments', os.path.basename(query['file']))
-                    connection.send(msg={'msg': 'Transferring file...'})
+                    connection.send(msg={'msg': 'proceed'})
                     connection.recv_file(attachment_file)
                     db.add_attachment(attachment_file, copy=False)
                     msg = 'Attachment added'
@@ -201,23 +202,7 @@ class DatabaseServer(socketserver.TCPServer):
         self.set_keys()
         self.current_session = None
         self._debug = debug
-        self._set_log()
         self._done = Event()
-
-    def _set_log(self):
-        self.log = logging.getLogger('DatabaseServer')
-        self.log.setLevel(logging.DEBUG)
-
-        if not self.log.handlers:
-            fh = logging.FileHandler(os.path.join(self.root_path, 'server.log'))
-
-            if self._debug:
-                fh.setLevel(logging.DEBUG)
-            else:
-                fh.setLevel(logging.INFO)
-
-            fh.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-            self.log.addHandler(fh)
 
     def set_keys(self):
         self.master_key = None
@@ -230,7 +215,11 @@ class DatabaseServer(socketserver.TCPServer):
     def handle_error(self, request, client_address):
         tb = traceback.format_exc()
         self.log.error(tb)
-        Connection(connection_socket=request).send(exception=tb)
+
+        try:
+            Connection(connection_socket=request).send(exception=tb)
+        except BrokenPipeError:
+            pass
 
     def refresh_databases(self):
         self.databases = get_local_databases(self.root_path)
@@ -323,6 +312,7 @@ class CentralServer(DatabaseServer):
 
     def __init__(self, root_path, debug=False):
         super().__init__((get_ip(), SERVER_PORT), CentralQueryHandler, root_path, debug)
+        self.log = logging.getLogger('central_server')
         self.refresh_databases()
         self.sessions = None
         self.master_key = get_master_key()
@@ -358,8 +348,9 @@ class CentralServer(DatabaseServer):
         start_workers(self.server_address, self.root_path, manager, 'admin', password, databases, locked_databases,
                       n_workers=cpu_count() - 1, debug=self._debug)
         print('Address: {}:{}'.format(*self.server_address))
+        log.disable_console()
         self.serve_forever()
-        print('Cluster shutdown')
+        self.log.info('Cluster shutdown')
 
     def shutdown(self):
 
@@ -375,7 +366,7 @@ class CentralServer(DatabaseServer):
             send(worker, {'request_type': 'shutdown'},
                  master_key=self.master_key, private_key=self.private_key)
 
-    def info(self, print_to_screen=True):
+    def info(self):
         info = list()
         info.append(f"user: {self.current_session['user']}")
 
@@ -406,12 +397,7 @@ class CentralServer(DatabaseServer):
                 else:
                     info.append(f"  '{database}'")
 
-        info = '\n'.join(info)
-
-        if print_to_screen:
-            print(info)
-        else:
-            return info
+        return '\n'.join(info)
 
     def add_worker(self, worker, databases, backup):
 
@@ -549,14 +535,14 @@ class WorkerServer(DatabaseServer):
     def __init__(self, server_address, central_address, root_path,
                  databases, main_lock, database_lock, backup=False, debug=False):
         super().__init__(server_address, WorkerQueryHandler, root_path, debug)
+        self.log = logging.getLogger()
+        self.logbuffer = log.add_buffer_handler()
         self.central = central_address
         self.databases = databases
         self.main_lock = main_lock
         self.database_lock = database_lock
         self.backup = backup
         self._shutdown_request = False
-        sys.stdout = LoggerWriter(self.log.info)
-        sys.stderr = LoggerWriter(self.log.error)
 
     def start(self, user, password):
 
@@ -575,6 +561,7 @@ class WorkerServer(DatabaseServer):
         finally:
             connection.kill()
 
+        log.disable_console()
         self.serve_forever()
 
     def shutdown(self):

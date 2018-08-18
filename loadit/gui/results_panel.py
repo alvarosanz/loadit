@@ -1,6 +1,10 @@
 import wx
 from loadit.gui.record_batch_table_grid import RecordBatchTableGrid
 from loadit.database import write_query, get_dataframe
+import logging
+
+
+log = logging.getLogger()
 
 
 class ResultsPanel(wx.Panel):
@@ -46,11 +50,11 @@ class ResultsPanel(wx.Panel):
 
                 try:
                     write_query(self.results, dialog.GetPath())
-                    self.root.statusbar.SetStatusText('Results saved')
+                    log.info('Results saved')
                 except Exception as e:
-                    self.root.statusbar.SetStatusText(str(e))
+                    log.error(str(e))
 
     def copy_to_clipboard(self, event):
-        self.root.statusbar.SetStatusText('Copying results to clipboard ...')
+        log.info('Copying results to clipboard ...')
         get_dataframe(self.results, False).to_clipboard()
-        self.root.statusbar.SetStatusText('Results copied to clipboard')
+        log.info('Results copied to clipboard')

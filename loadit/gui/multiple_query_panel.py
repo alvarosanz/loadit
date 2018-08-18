@@ -1,6 +1,10 @@
 import wx
 import os
 import json
+import logging
+
+
+log = logging.getLogger()
 
 
 class MultipleQueryPanel(wx.Panel):
@@ -75,7 +79,7 @@ class MultipleQueryPanel(wx.Panel):
 
                             self._queries.SetItem(len(self.queries) - 1, 2, 'Pending')
                     else:
-                        self.root.statusbar.SetStatusText('Query file already selected!')
+                        log.info('Query file already selected!')
         
                 self.update()
 
@@ -97,17 +101,17 @@ class MultipleQueryPanel(wx.Panel):
                 self.queries = list()
                 self._queries.DeleteAllItems()
                 self.update()
-                self.root.statusbar.SetStatusText('All queries cleared')
+                log.info('All queries cleared')
 
     def do_queries(self, event):
         
         for i, query_file in enumerate(self.queries):
-            self.root.statusbar.SetStatusText(f"Performing query '{os.path.basename(query_file)}' ({i + 1} of {len(self.queries)})...")
+            log.info(f"Performing query '{os.path.basename(query_file)}' ({i + 1} of {len(self.queries)})...")
             self._queries.SetItem(i, 2, 'In progress ...')
             self.database.query_from_file(query_file)
             self._queries.SetItem(i, 2, 'Done')
 
-        self.root.statusbar.SetStatusText('Done!')
+        log.info('Done!')
 
     def show_menu(self, event):
 
