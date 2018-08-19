@@ -9,9 +9,10 @@ log = logging.getLogger()
 
 class ResultsPanel(wx.Panel):
 
-    def __init__(self, parent, root):
+    def __init__(self, parent, root, log):
         super().__init__(parent=parent, id=wx.ID_ANY)
         self.root = root
+        self.log = log
         self.results = None
 
         sizer = wx.BoxSizer(wx.VERTICAL)

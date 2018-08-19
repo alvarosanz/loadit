@@ -3,6 +3,7 @@ import os
 import re
 import json
 from loadit.database import parse_query, write_query, check_query
+from loadit.log import custom_logging
 import logging
 
 
@@ -11,12 +12,13 @@ log = logging.getLogger()
 
 class QueryPanel(wx.Panel):
 
-    def __init__(self, parent, root, database, results_panel):
+    def __init__(self, parent, root, database, results_panel, log):
         super().__init__(parent=parent, id=wx.ID_ANY)
         self.root = root
         self.parent = parent
         self.database = database
         self.results_panel = results_panel
+        self.log = log
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(-1, 8)
@@ -434,6 +436,7 @@ class QueryPanel(wx.Panel):
 
                 log.info('Query saved')
 
+    @custom_logging
     def do_query(self, event):
         query = self.get_query(parse=True)
         results = self.database.query(**query)
@@ -442,7 +445,7 @@ class QueryPanel(wx.Panel):
             write_query(results, query['output_file'])
 
         self.results_panel.update(results)
-        self.parent.SetSelection(0)
+        self.parent.SetSelection(2)
 
     def get_query(self, parse=False):
         query = dict()

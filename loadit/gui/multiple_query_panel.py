@@ -1,6 +1,7 @@
 import wx
 import os
 import json
+from loadit.log import custom_logging
 import logging
 
 
@@ -9,10 +10,11 @@ log = logging.getLogger()
 
 class MultipleQueryPanel(wx.Panel):
 
-    def __init__(self, parent, root, database):
+    def __init__(self, parent, root, database, log):
         super().__init__(parent=parent, id=wx.ID_ANY)
         self.root = root
         self.database = database
+        self.log = log
         self.queries = list()
 
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -103,6 +105,7 @@ class MultipleQueryPanel(wx.Panel):
                 self.update()
                 log.info('All queries cleared')
 
+    @custom_logging
     def do_queries(self, event):
         
         for i, query_file in enumerate(self.queries):

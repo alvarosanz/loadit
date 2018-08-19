@@ -6,6 +6,7 @@ from loadit.gui.new_batch_dialog import NewBatchDialog
 from loadit.gui.database_info_dialog import DatabaseInfoDialog
 from loadit.gui.table_info_dialog import TableInfoDialog
 from loadit.gui.check_dialog import CheckDialog
+from loadit.log import custom_logging
 import logging
 
 
@@ -14,12 +15,13 @@ log = logging.getLogger()
 
 class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
 
-    def __init__(self, parent, root, database):
+    def __init__(self, parent, root, database, log):
         super().__init__(parent, wx.ID_ANY, size=(350, -1), style=wx.TR_HAS_BUTTONS + wx.TR_HIDE_ROOT + wx.TR_SINGLE +
                          wx.lib.agw.hypertreelist.TR_ELLIPSIZE_LONG_ITEMS + wx.lib.agw.hypertreelist.LIST_AUTOSIZE_CONTENT_OR_HEADER)
         self.database = database
         self.parent = parent
         self.root = root
+        self.log = log
         self.AddColumn('Item', width=250)
         self.AddColumn('Size', width=70, flag=wx.ALIGN_RIGHT)
         self.update()
@@ -113,6 +115,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         self.Expand(self.batches)
         self.Expand(self.attachments)
 
+    @custom_logging
     def refresh(self, event):
 
         if self.parent.is_local:
@@ -121,6 +124,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
             self.parent.database = self.root.client.load_remote_database(self.database.path)
 
         self.parent.update()
+        log.info('Database re-loaded')
 
     def database_info(self, event):
 
@@ -151,6 +155,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         with TableInfoDialog(self.root, self.database.header.tables[item.GetText()], self.database) as dialog:
             dialog.ShowModal()
 
+    @custom_logging
     def check(self, event):
         log.info('Checking integrity...')
         check_summary = self.database.check(print_to_screen=False)
@@ -163,6 +168,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
             with CheckDialog(self.root, check_summary) as dialog:
                 dialog.ShowModal()
 
+    @custom_logging
     def new_batch(self, event):
 
         with NewBatchDialog(self.root) as dialog:
@@ -175,6 +181,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                 except Exception as e:
                     log.error(str(e))
 
+    @custom_logging
     def restore(self, event):
         batch = self.GetSelection().GetText()
         batches = [batch[0] for batch in self.database.header.batches]
@@ -191,6 +198,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                 except Exception as e:
                     log.error(str(e))
 
+    @custom_logging
     def add_attachment(self, event):
         
         with wx.FileDialog(self.root, 'Add attachment', style=wx.FD_DEFAULT_STYLE) as dialog:
@@ -203,6 +211,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                 except Exception as e:
                     log.error(str(e))
 
+    @custom_logging
     def download_attachment(self, event):
         attachment = self.GetSelection().GetText()
 
@@ -217,6 +226,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                 except Exception as e:
                     log.error(str(e))
 
+    @custom_logging
     def remove_attachment(self, event):
 
         with wx.MessageDialog(self.root, 'Are you sure?', 'Remove attachment', style=wx.YES_NO + wx.NO_DEFAULT) as dialog:

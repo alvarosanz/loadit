@@ -100,7 +100,7 @@ class MainWindow(wx.Frame):
             if session['is_admin']:
                 self.remotemenu_management.Enable(True)
 
-    def _new_tab(self, func, database, msg, is_local=True):
+    def _new_tab(self, func, database, msg=None, is_local=True):
 
         try:
             tab = DatabaseTab(self.notebook, self, func(database), is_local)
@@ -111,7 +111,9 @@ class MainWindow(wx.Frame):
             if not is_local:
                 self.remote_tabs.append(tab)
 
-            log.info(msg)
+            if msg:
+                log.info(msg)
+
         except Exception as e:
             log.error(str(e))
 
@@ -133,7 +135,7 @@ class MainWindow(wx.Frame):
 
             if dialog.ShowModal() == wx.ID_OK:
                 database = dialog.GetPath()
-                self._new_tab(self.client.load_database, database, 'Database loaded', is_local=True)
+                self._new_tab(self.client.load_database, database, is_local=True)
 
     def on_tab_close(self, event):
 

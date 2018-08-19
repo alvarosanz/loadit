@@ -6,3 +6,4 @@
 *.sublime-workspace
 *.code-workspace
 .vscode
+*.log

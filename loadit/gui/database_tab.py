@@ -1,35 +1,49 @@
 import wx
 from loadit.gui.database_tree import DatabaseTree
+from loadit.gui.results_panel import ResultsPanel
 from loadit.gui.query_panel import QueryPanel
 from loadit.gui.multiple_query_panel import MultipleQueryPanel
-from loadit.gui.results_panel import ResultsPanel
+from loadit.gui.database_log_panel import DatabaseLogPanel
+from loadit.log import custom_logging
+import logging
+
+
+log = logging.getLogger()
 
 
 class DatabaseTab(wx.Panel):
-
+    
     def __init__(self, parent, root, database, is_local=True):
         super().__init__(parent=parent, id=wx.ID_ANY)
         self.root = root
         self.database = database
         self.is_local = is_local
 
-        self.tree = DatabaseTree(self, self.root, self.database)
+        notebook = wx.Notebook(self)
+        self.database_log_panel = DatabaseLogPanel(notebook)
+        self.log = self.database_log_panel.log
+        self.results_panel = ResultsPanel(notebook, self.root, self.log)
+        self.single_query_panel = QueryPanel(notebook, self.root, self.database, self.results_panel, self.log)
+        self.multiple_query_panel = MultipleQueryPanel(notebook, self.root, self.database, self.log)
+
+        self.tree = DatabaseTree(self, self.root, self.database, self.log)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.tree, 0, wx.EXPAND | wx.ALL, 5)
 
-        notebook = wx.Notebook(self)
-
-        self.results_panel = ResultsPanel(notebook, self.root)
-        notebook.AddPage(self.results_panel, 'Results')
-        self.single_query_panel = QueryPanel(notebook, self.root, self.database, self.results_panel)
         notebook.AddPage(self.single_query_panel, 'Single Query')
-        self.multiple_query_panel = MultipleQueryPanel(notebook, self.root, self.database)
         notebook.AddPage(self.multiple_query_panel, 'Multiple Query')
-        notebook.ChangeSelection(1)
+        notebook.AddPage(self.results_panel, 'Results')
+        notebook.AddPage(self.database_log_panel, 'Log')
+        notebook.ChangeSelection(0)
         notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_tab_changing)
 
         sizer.Add(notebook, 1, wx.EXPAND | wx.ALL, 5)
         self.SetSizer(sizer)
+        self.initial_message()
+
+    @custom_logging
+    def initial_message(self):
+        log.info('Database loaded')
 
     def update(self):
         self.tree.database = self.database
@@ -41,7 +55,7 @@ class DatabaseTab(wx.Panel):
 
     def on_tab_changing(self, event):
         
-        if event.GetSelection() != 0:
+        if event.GetSelection() != 2:
             event.Skip()
         else:
 
