@@ -28,9 +28,10 @@ SERVER_PORT = 8080
 class CentralQueryHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
-        connection = Connection(connection_socket=self.request)
+        connection = self.server.connection
         query = connection.recv()
         self.server.check_session(query)
+        log_request = True
 
         # WORKER REQUESTS
         if query['request_type'] == 'add_worker':
@@ -79,6 +80,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
         elif query['request_type'] == 'sync_databases':
             self.server.sync_databases(query['nodes'], query['databases'], connection)
         else:
+            log_request = False
 
             if query['request_type'] != 'create_database' and query['path'] not in self.server.databases:
                 raise ValueError("Database '{}' not available!".format(query['path']))
@@ -92,10 +94,29 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
 
             connection.send(msg={'redirection_address': self.server.acquire_worker(node=node, database=query['path'])})
 
+        if log_request:
+
+            if query['request_type'] == 'release_worker':
+                user = query['user']
+                client_address = query['client_address']
+                request_type = query['request']
+                nbytes_in = query['nbytes_in']
+                nbytes_out = query['nbytes_out']
+            else:
+                user = self.server.current_session['user']
+                client_address = self.request.getpeername()[0]
+                request_type = query['request_type']
+                nbytes_in = connection.nbytes_in
+                nbytes_out = connection.nbytes_out
+
+            self.server.log.info("user: {} ({}), request: {}, in: {}, out: {}".format(user, client_address, request_type,
+                                                                                      humansize(nbytes_in), humansize(nbytes_out)))
+
+
 class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
-        connection = Connection(connection_socket=self.request)
+        connection = self.server.connection
         self.server.log_handler = log.ConnectionHandler(connection)
         self.server.log_handler.setLevel(logging.INFO)
         self.server.log_handler.setFormatter(logging.Formatter('%(message)s'))
@@ -215,7 +236,7 @@ class DatabaseServer(socketserver.TCPServer):
         self.log.error(tb)
 
         try:
-            Connection(connection_socket=request).send(exception=tb)
+            self.connection.send(exception=tb)
         except BrokenPipeError:
             pass
 
@@ -226,8 +247,8 @@ class DatabaseServer(socketserver.TCPServer):
         error_msg = 'Access denied!'
 
         try:
-            connection = Connection(connection_socket=request, private_key=self.private_key)
-            data = json.loads(connection.recv_secret().decode())
+            self.connection = Connection(connection_socket=request, private_key=self.private_key)
+            data = json.loads(self.connection.recv_secret().decode())
 
             if 'master_key' in data:
 
@@ -256,10 +277,10 @@ class DatabaseServer(socketserver.TCPServer):
                         error_msg = 'Not enough privileges!'
                         raise PermissionError()
 
-                    connection.send_secret(self.master_key)
+                    self.connection.send_secret(self.master_key)
                 else:
                     authentication = jwt.encode(self.current_session, self.master_key)
-                    connection.send_secret(authentication)
+                    self.connection.send_secret(authentication)
 
             elif 'authentication' in data:
 
@@ -272,11 +293,11 @@ class DatabaseServer(socketserver.TCPServer):
             else:
                 raise PermissionError()
 
-            connection.send(b'Access granted!')
+            self.connection.send(b'Access granted!')
             return True
 
         except PermissionError:
-            connection.send(exception=error_msg)
+            self.connection.send(exception=error_msg)
             return False
         except Exception:
             self.handle_error(request, client_address)
@@ -453,6 +474,7 @@ class CentralServer(DatabaseServer):
     def shutdown_request(self, request):
         super().shutdown_request(request)
         self.current_session = None
+        self.connection = None
 
 
 class Node(object):
@@ -569,11 +591,17 @@ class WorkerServer(DatabaseServer):
 
     def shutdown_request(self, request):
         self.log.handlers.remove(self.log_handler)
+        client_address = request.getpeername()[0]
         super().shutdown_request(request)
 
         if not self._shutdown_request:
             data = {'request_type': 'release_worker',
-                    'worker_address': self.server_address}
+                    'worker_address': self.server_address,
+                    'nbytes_in': self.connection.nbytes_in,
+                    'nbytes_out': self.connection.nbytes_out,
+                    'request': self.current_session['request_type'],
+                    'client_address': client_address,
+                    'user': self.current_session['user']}
 
             if self.current_session['database_modified']:
                 data['databases'] = self.databases._getvalue()
@@ -581,6 +609,7 @@ class WorkerServer(DatabaseServer):
             send(self.central, data, master_key=self.master_key, private_key=self.private_key)
 
         self.current_session = None
+        self.connection = None
 
     def sync_databases(self, nodes, databases, client_connection):
         self.refresh_databases()

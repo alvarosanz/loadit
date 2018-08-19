@@ -32,6 +32,8 @@ class Connection(object):
         self.header_size = header_size
         self.buffer_size = buffer_size
         self.pending_data = b''
+        self.nbytes_in = 0
+        self.nbytes_out = 0
 
     def connect(self, server_address):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -69,6 +71,7 @@ class Connection(object):
 
         self.socket.send((str(len(bytes)).zfill(self.header_size - 1) + data_type).encode())
         self.socket.sendall(bytes)
+        self.nbytes_out += self.header_size + len(bytes)
 
     def recv(self):
 
@@ -82,6 +85,7 @@ class Connection(object):
             while buffer.tell() < size:
                 buffer.write(self.socket.recv(self.buffer_size))
 
+            self.nbytes_in += self.header_size + size
             buffer.seek(size)
             self.pending_data = buffer.read()
             buffer.seek(size)
@@ -153,14 +157,16 @@ class Connection(object):
             yield table
 
     def send_file(self, file):
-        self.socket.send(str(os.path.getsize(file)).zfill(self.header_size).encode())
+        size = os.path.getsize(file)
+        self.socket.send(str(size).zfill(self.header_size).encode())
 
         with open(file, 'rb') as f:
             sended = 1
 
             while sended:
                 sended = self.socket.send(f.read(self.buffer_size))
-
+        
+        self.nbytes_out += self.header_size + size
         self.recv()
 
     def recv_file(self, file):
@@ -173,6 +179,7 @@ class Connection(object):
             while f.tell() < size:
                 f.write(self.socket.recv(self.buffer_size))
 
+        self.nbytes_in += self.header_size + size
         self.send(b'OK')
 
     def send_secret(self, secret):
