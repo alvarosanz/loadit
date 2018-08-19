@@ -5,7 +5,6 @@ from loadit.misc import humansize
 from loadit.gui.new_batch_dialog import NewBatchDialog
 from loadit.gui.database_info_dialog import DatabaseInfoDialog
 from loadit.gui.table_info_dialog import TableInfoDialog
-from loadit.gui.check_dialog import CheckDialog
 from loadit.log import custom_logging
 import logging
 
@@ -157,16 +156,10 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
 
     @custom_logging
     def check(self, event):
-        log.info('Checking integrity...')
-        check_summary = self.database.check(print_to_screen=False)
-        
-        if check_summary == 'Everything is OK!':
-            log.info(check_summary)
-        else:
-            log.warning('There are corrupted file/s!')
+        self.parent.notebook.SetSelection(3)
 
-            with CheckDialog(self.root, check_summary) as dialog:
-                dialog.ShowModal()
+        if self.database.check():
+            self.root.statusbar.SetStatusText('There are corrupted file/s!')
 
     @custom_logging
     def new_batch(self, event):
@@ -174,6 +167,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         with NewBatchDialog(self.root) as dialog:
         
             if dialog.ShowModal() == wx.ID_OK:
+                self.parent.notebook.SetSelection(3)
 
                 try:
                     self.database.new_batch(dialog.files, dialog.name, dialog.comment)
@@ -190,6 +184,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
             dialog.SetSelection(batches.index(batch))
 
             if dialog.ShowModal() == wx.ID_OK:
+                self.parent.notebook.SetSelection(3)
                 batch = dialog.GetStringSelection()
 
                 try:
@@ -204,6 +199,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         with wx.FileDialog(self.root, 'Add attachment', style=wx.FD_DEFAULT_STYLE) as dialog:
         
             if dialog.ShowModal() == wx.ID_OK:
+                self.parent.notebook.SetSelection(3)
 
                 try:
                     self.database.add_attachment(dialog.GetPath())
@@ -219,6 +215,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
             dialog.SetFilename(attachment)
 
             if dialog.ShowModal() == wx.ID_OK:
+                self.parent.notebook.SetSelection(3)
 
                 try:
                     self.database.download_attachment(attachment, dialog.GetPath())
@@ -232,6 +229,7 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
         with wx.MessageDialog(self.root, 'Are you sure?', 'Remove attachment', style=wx.YES_NO + wx.NO_DEFAULT) as dialog:
 
             if dialog.ShowModal() == wx.ID_YES:
+                self.parent.notebook.SetSelection(3)
 
                 try:
                     self.database.remove_attachment(self.GetSelection().GetText())

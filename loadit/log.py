@@ -1,6 +1,5 @@
 import sys
 import logging
-from io import StringIO
 
 
 def add_handler(handler, logger=None, format='%(asctime)s - %(message)s', time_format='%Y-%m-%d %H:%M:%S', level=logging.INFO):
@@ -27,33 +26,27 @@ def disable_console():
     logging.getLogger().handlers.remove(console_handler)
 
 
-class BufferLog(StringIO):
+class ConnectionHandler(logging.StreamHandler):
     
-    def __init__(self):
+    def __init__(self, connection):
         super().__init__()
+        self.connection = connection
         
-    def pull(self):
-        value = self.getvalue()
-        self.clear()
-        return value
-    
-    def clear(self):
-        self.seek(0)
-        self.truncate()
+    def emit(self, record):
+
+        if record.levelname == 'DEBUG':
+            self.connection.send(debug_msg=record.getMessage())
+        elif record.levelname == 'INFO':
+            self.connection.send(info_msg=record.getMessage())
+        elif record.levelname == 'WARNING':
+            self.connection.send(warning_msg=record.getMessage())
+        elif record.levelname == 'ERROR':
+            self.connection.send(error_msg=record.getMessage())
+        elif record.levelname == 'CRITICAL':
+            self.connection.send(critical_msg=record.getMessage()) 
 
 
-_logbuffer = None
 _is_file_handler = False
-
-    
-def add_buffer_handler():
-    global _logbuffer
-    
-    if _logbuffer is None:
-        _logbuffer = BufferLog()
-        add_handler(logging.StreamHandler(_logbuffer), time_format='%H:%M:%S')
-        
-    return _logbuffer
 
 
 def add_file_handler(file=None):

@@ -438,6 +438,7 @@ class QueryPanel(wx.Panel):
 
     @custom_logging
     def do_query(self, event):
+        self.parent.SetSelection(3)
         query = self.get_query(parse=True)
         results = self.database.query(**query)
 

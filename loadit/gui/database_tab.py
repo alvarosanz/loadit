@@ -19,25 +19,25 @@ class DatabaseTab(wx.Panel):
         self.database = database
         self.is_local = is_local
 
-        notebook = wx.Notebook(self)
-        self.database_log_panel = DatabaseLogPanel(notebook)
+        self.notebook = wx.Notebook(self)
+        self.database_log_panel = DatabaseLogPanel(self.notebook)
         self.log = self.database_log_panel.log
-        self.results_panel = ResultsPanel(notebook, self.root, self.log)
-        self.single_query_panel = QueryPanel(notebook, self.root, self.database, self.results_panel, self.log)
-        self.multiple_query_panel = MultipleQueryPanel(notebook, self.root, self.database, self.log)
+        self.results_panel = ResultsPanel(self.notebook, self.root, self.log)
+        self.single_query_panel = QueryPanel(self.notebook, self.root, self.database, self.results_panel, self.log)
+        self.multiple_query_panel = MultipleQueryPanel(self.notebook, self.root, self.database, self.log)
 
         self.tree = DatabaseTree(self, self.root, self.database, self.log)
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(self.tree, 0, wx.EXPAND | wx.ALL, 5)
 
-        notebook.AddPage(self.single_query_panel, 'Single Query')
-        notebook.AddPage(self.multiple_query_panel, 'Multiple Query')
-        notebook.AddPage(self.results_panel, 'Results')
-        notebook.AddPage(self.database_log_panel, 'Log')
-        notebook.ChangeSelection(0)
-        notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_tab_changing)
+        self.notebook.AddPage(self.single_query_panel, 'Single Query')
+        self.notebook.AddPage(self.multiple_query_panel, 'Multiple Query')
+        self.notebook.AddPage(self.results_panel, 'Results')
+        self.notebook.AddPage(self.database_log_panel, 'Log')
+        self.notebook.ChangeSelection(0)
+        self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_tab_changing)
 
-        sizer.Add(notebook, 1, wx.EXPAND | wx.ALL, 5)
+        sizer.Add(self.notebook, 1, wx.EXPAND | wx.ALL, 5)
         self.SetSizer(sizer)
         self.initial_message()
 

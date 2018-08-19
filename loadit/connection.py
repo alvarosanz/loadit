@@ -41,14 +41,29 @@ class Connection(object):
         self.socket.close()
         self.encryptor = None
 
-    def send(self, bytes=None, msg=None, exception=None):
+    def send(self, bytes=None, msg=None, debug_msg=None, info_msg=None, warning_msg=None, error_msg=None, critical_msg=None, exception=None):
 
-        if bytes:
+        if bytes: # bytes message
             data_type = '0'
-        elif msg:
+        elif msg: # json message
             data_type = '1'
             bytes = json.dumps(msg).encode()
-        elif exception:
+        elif debug_msg: # debug log record
+            data_type = '2'
+            bytes = debug_msg.encode()
+        elif info_msg: # info log record
+            data_type = '3'
+            bytes = info_msg.encode()
+        elif warning_msg: # warning log record
+            data_type = '4'
+            bytes = warning_msg.encode()
+        elif error_msg: # error log record
+            data_type = '5'
+            bytes = error_msg.encode()
+        elif critical_msg: # critical log record
+            data_type = '6'
+            bytes = critical_msg.encode()
+        elif exception: # exception
             data_type = '#'
             bytes = exception.encode()
 
@@ -56,27 +71,39 @@ class Connection(object):
         self.socket.sendall(bytes)
 
     def recv(self):
-        data = self._recv0()
-        size = int(data[:self.header_size - 1].decode())
-        data_type = data[self.header_size - 1:self.header_size].decode()
-        buffer = BytesIO()
-        buffer.write(data[self.header_size:])
 
-        while buffer.tell() < size:
-            buffer.write(self.socket.recv(self.buffer_size))
+        while True:
+            data = self._recv0()
+            size = int(data[:self.header_size - 1].decode())
+            data_type = data[self.header_size - 1:self.header_size].decode()
+            buffer = BytesIO()
+            buffer.write(data[self.header_size:])
 
-        buffer.seek(size)
-        self.pending_data = buffer.read()
-        buffer.seek(size)
-        buffer.truncate()
-        buffer.seek(0)
+            while buffer.tell() < size:
+                buffer.write(self.socket.recv(self.buffer_size))
 
-        if data_type == '0':
-            return buffer
-        elif data_type == '1':
-            return json.loads(buffer.read().decode())
-        elif data_type == '#':
-            raise ConnectionError(buffer.read().decode())
+            buffer.seek(size)
+            self.pending_data = buffer.read()
+            buffer.seek(size)
+            buffer.truncate()
+            buffer.seek(0)
+
+            if data_type == '0': # bytes message
+                return buffer
+            elif data_type == '1': # json message
+                return json.loads(buffer.read().decode())
+            elif data_type == '2': # debug log record
+                log.debug(buffer.read().decode())
+            elif data_type == '3': # info log record
+                log.info(buffer.read().decode())
+            elif data_type == '4': # warning log record
+                log.warning(buffer.read().decode())
+            elif data_type == '5': # error log record
+                log.error(buffer.read().decode())
+            elif data_type == '6': # critical log record
+                log.critical(buffer.read().decode())
+            elif data_type == '#': # exception
+                raise ConnectionError(buffer.read().decode())
 
     def _recv0(self):
         data = self.pending_data
@@ -191,12 +218,11 @@ def get_ip():
     try:
         # doesn't even have to be reachable
         s.connect(('10.255.255.255', 1))
-        IP = s.getsockname()[0]
+        return s.getsockname()[0]
     except:
-        IP = '127.0.0.1'
+        return '127.0.0.1'
     finally:
         s.close()
-    return IP
 
 
 def find_free_port():

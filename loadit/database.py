@@ -230,7 +230,7 @@ def create_database(database_path, overwrite=False):
     Path(database_path).mkdir(parents=True, exist_ok=overwrite)
     (Path(database_path) / '.attachments').mkdir(exist_ok=overwrite)
     assembly_database(database_path, dict(), list())
-    log.info('Database created')
+    log.info(f"Database '{os.path.basename(database_path)}' created")
     database = Database(database_path)
     database.load()
     return database
@@ -272,20 +272,16 @@ class Database(object):
                           field_name, dtype in header['columns'][2:]]
                 self.tables[name] = TableData(fields, header['LIDs'], header['IDs'])
 
-    def check(self, print_to_screen=True):
+    def check(self):
         """
         Check database integrity.
 
-        Parameters
-        ----------
-        print_to_screen : bool, optional
-            Whether to print to screen or return an string instead.
-
         Returns
         -------
-        str, optional
-            Database check integrity results.
+        list of str
+            List of corrupted files.
         """
+        log.info('Checking database integrity...')
         files_corrupted = list()
 
         # Check tables integrity
@@ -318,21 +314,17 @@ class Database(object):
                     files_corrupted.append(attachment_file)
 
         # Summary
-        info = list()
-
         if files_corrupted:
+            info = list()
 
             for file in files_corrupted:
                 info.append(f"'{Path(file).relative_to(self.path).as_posix()}' is corrupted!")
-        else:
-            info.append('Everything is OK!')
 
-        info = '\n'.join(info)
-
-        if print_to_screen:
-            print(info)
+            log.error('\n'.join(info))
         else:
-            return info
+            log.info('Everything is OK!')
+
+        return files_corrupted
 
     def _close(self):
         """
@@ -399,7 +391,7 @@ class Database(object):
                                              os.path.getsize(attachment_file)]
 
         self._write_header()
-        log.info('Attachment added')
+        log.info(f"Attachment '{name}' added")
 
     def remove_attachment(self, name):
         """
@@ -417,7 +409,7 @@ class Database(object):
         os.remove(os.path.join(self.path, '.attachments', name))
         del self.header.attachments[name]
         self._write_header()
-        log.info('Attachment removed')
+        log.info(f"Attachment '{name}' removed")
 
     def download_attachment(self, name, path):
         """
@@ -436,7 +428,7 @@ class Database(object):
 
         shutil.copyfile(os.path.join(self.path, '.attachments', name),
                         os.path.join(path))
-        log.info('Attachment downloaded')
+        log.info(f"Attachment '{name}' downloaded")
 
     def new_batch(self, files, batch_name, comment='', table_generator=None):
         """
@@ -477,7 +469,7 @@ class Database(object):
         assembly_database(self.path, self.header.tables, self.header.batches,
                           self.max_memory, self.header.hash_function, self.header.attachments)
         self.load()
-        log.info('New batch created')
+        log.info(f"Batch '{batch_name}' created")
 
     def restore(self, batch_name):
         """
@@ -493,7 +485,7 @@ class Database(object):
         if batch_name not in restore_points:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
-        log.info('Restoring database...')
+        log.info(f"Restoring database to '{batch_name}'...")
         self._close()
         batch_index = 0
 
@@ -528,7 +520,7 @@ class Database(object):
         if self.header.batches[-1][1] != batch_hash_old:
             raise ValueError('Database header is corrupted!')
 
-        log.info('Database restored')
+        log.info(f"Database restored to '{batch_name}'")
 
     def query_from_file(self, file, double_precision=False):
         """

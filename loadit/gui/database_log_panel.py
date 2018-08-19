@@ -10,7 +10,7 @@ class DatabaseLogPanel(wx.Panel):
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(-1, 8)
 
-        self._log = wx.TextCtrl(self, style=wx.TE_MULTILINE + wx.TE_READONLY)
+        self._log = DatabaseLogTextCtrl(self, style=wx.TE_MULTILINE + wx.TE_READONLY)
         sizer.Add(self._log, 1, wx.ALL + wx.EXPAND, 5)
         self.log = logging.StreamHandler(self._log)
         self.log.setLevel(logging.INFO)
@@ -27,3 +27,10 @@ class DatabaseLogPanel(wx.Panel):
 
     def clear(self, event):
         self._log.SetValue('')
+
+
+class DatabaseLogTextCtrl(wx.TextCtrl):
+
+    def write(self, msg):
+        super().AppendText(msg)
+        wx.Yield()

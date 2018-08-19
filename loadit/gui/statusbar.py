@@ -1,6 +1,10 @@
 import sys
 import wx
 import re
+import logging
+
+
+log = logging.getLogger()
 
 
 class CustomStatusBar(wx.StatusBar):
@@ -56,4 +60,7 @@ class CustomStatusBar(wx.StatusBar):
 
         if not self.exclude_pattern.search(msg):
             self.SetStatusText(msg.replace('\n', '; '))
-            wx.Yield()
+
+            if len(log.handlers) == 1:
+                wx.Yield()
+            

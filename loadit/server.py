@@ -64,7 +64,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
                 connection.send(msg={'msg': 'Cluster shutdown'})
 
         elif query['request_type'] == 'cluster_info':
-            connection.send(msg={'msg': self.server.info()})
+            connection.send(self.server.info().encode())
         elif query['request_type'] == 'add_session':
             self.server.sessions.add_session(query['user'], session_hash=query['session_hash'],
                                              is_admin=query['is_admin'],
@@ -96,6 +96,10 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
     def handle(self):
         connection = Connection(connection_socket=self.request)
+        self.server.log_handler = log.ConnectionHandler(connection)
+        self.server.log_handler.setLevel(logging.INFO)
+        self.server.log_handler.setFormatter(logging.Formatter('%(message)s'))
+        self.server.log.addHandler(self.server.log_handler)
         query = connection.recv()
         self.server.check_session(query)
 
@@ -124,7 +128,6 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                                                                                     'add_attachment',
                                                                                     'remove_attachment'))):
                 path = os.path.join(self.server.root_path, query['path'])
-                msg = ''
 
                 if query['request_type'] == 'create_database':
 
@@ -132,34 +135,30 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                         raise FileExistsError(f"Database already exists at '{query['path']}'!")
 
                     db = create_database(path)
-                    msg = 'Database created'
                 else:
                     db = Database(path)
 
                 if query['request_type'] == 'check':
-                    msg = db.check(print_to_screen=False)
+                    connection.send(msg={'corrupted_files': db.check(), 'header': None})
+                    return
                 elif query['request_type'] == 'query':
                     batch = db.query(**parse_query(query))
                 elif query['request_type'] == 'new_batch':
                     connection.send(msg=db._get_tables_specs())
                     db.new_batch(query['files'], query['batch'], query['comment'], table_generator=connection.recv_tables())
-                    msg = 'New batch created'
                 elif query['request_type'] == 'restore_database':
                     db.restore(query['batch'])
-                    msg = 'Database restored'
                 elif query['request_type'] == 'add_attachment':
 
                     if query['file'] in db.header.attachments:
                         raise FileExistsError(f"Already existing attachment!")
 
                     attachment_file = os.path.join(path, '.attachments', os.path.basename(query['file']))
-                    connection.send(msg={'msg': 'proceed'})
+                    connection.send(b'proceed')
                     connection.recv_file(attachment_file)
                     db.add_attachment(attachment_file, copy=False)
-                    msg = 'Attachment added'
                 elif query['request_type'] == 'remove_attachment':
                     db.remove_attachment(query['name'])
-                    msg = 'Attachment removed'
                 elif query['request_type'] == 'download_attachment':
 
                     if query['name'] not in db.header.attachments:
@@ -168,7 +167,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                     attachment_file = os.path.join(path, '.attachments', query['name'])
                     connection.send(msg={'msg': f"Downloading '{query['name']}' ({humansize(os.path.getsize(attachment_file))})..."})
                     connection.send_file(attachment_file)
-                    msg = 'Attachment downloaded'
+                    self.server.log.info(f"Attachment '{query['name']}' downloaded")
 
                 if self.server.current_session['database_modified']:
                     self.server.databases[query['path']] = get_database_hash(os.path.join(path, '##header.json'))
@@ -184,11 +183,10 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
 
             try:
                 batch_message = get_batch_message(batch)
-                msg = f"Transferring query results ({humansize(len(batch_message))})..."
-                connection.send(msg={'msg': msg, 'header': header})
+                connection.send(msg={'msg': f"Transferring query results ({humansize(len(batch_message))})...", 'header': header})
                 connection.send(batch_message)
             except NameError:
-                connection.send(msg={'msg': msg, 'header': header})
+                connection.send(msg={'header': header})
 
 
 class DatabaseServer(socketserver.TCPServer):
@@ -536,7 +534,6 @@ class WorkerServer(DatabaseServer):
                  databases, main_lock, database_lock, backup=False, debug=False):
         super().__init__(server_address, WorkerQueryHandler, root_path, debug)
         self.log = logging.getLogger()
-        self.logbuffer = log.add_buffer_handler()
         self.central = central_address
         self.databases = databases
         self.main_lock = main_lock
@@ -571,6 +568,7 @@ class WorkerServer(DatabaseServer):
         super().shutdown()
 
     def shutdown_request(self, request):
+        self.log.handlers.remove(self.log_handler)
         super().shutdown_request(request)
 
         if not self._shutdown_request:

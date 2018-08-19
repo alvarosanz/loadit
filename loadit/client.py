@@ -58,7 +58,6 @@ class BaseClient(object):
             self.authenticate(connection, user=kwargs.pop('user', None), password=kwargs.pop('password', None))
 
             # Sending request
-
             if is_redirected:
                 connection.send(msg={key: kwargs[key] for key in ('request_type', 'path')})
             else:
@@ -80,6 +79,9 @@ class BaseClient(object):
                 connection.send(msg=kwargs)
                 data = connection.recv()
 
+            if 'msg' in data and data['msg']:
+                log.info(data['msg'])
+
             # Processing request
             if kwargs['request_type'] == 'sync_databases':
 
@@ -89,11 +91,8 @@ class BaseClient(object):
 
             elif kwargs['request_type'] == 'new_batch':
                 connection.send_tables(kwargs['files'], data)
-                log.info('Assembling database...')
                 data = connection.recv()
             elif kwargs['request_type'] == 'query':
-                log.info('Done!')
-                log.info(data['msg'])
                 reader = pa.RecordBatchStreamReader(pa.BufferReader(connection.recv().getbuffer()))
                 log.info('Done!')
                 data['batch'] = reader.read_next_batch()
@@ -102,14 +101,12 @@ class BaseClient(object):
                 connection.send_file(kwargs['file'])
                 data = connection.recv()
             elif kwargs['request_type'] == 'download_attachment':
-                log.info(data['msg'])
                 connection.recv_file(os.path.join(kwargs['output_path'], kwargs['name']))
                 data = connection.recv()
 
+            return data
         finally:
             connection.kill()
-
-        return data
 
 
 class DatabaseClient(BaseClient):
@@ -148,26 +145,16 @@ class DatabaseClient(BaseClient):
     def read_only(self):
         return not jwt.decode(self._authentication, verify=False)['is_admin']
 
-    def check(self, print_to_screen=True):
+    def check(self):
         """
         Check database integrity.
 
-        Parameters
-        ----------
-        print_to_screen : bool, optional
-            Whether to print to screen or return an string instead.
-
         Returns
         -------
-        str, optional
-            Database check integrity results.
+        list of str
+            List of corrupted files.
         """
-        info = self._request(request_type='check')['msg']
-
-        if print_to_screen:
-            print(info)
-        else:
-            return info
+        return self._request(request_type='check')['corrupted_files']
 
     def add_attachment(self, file):
         """
@@ -178,7 +165,7 @@ class DatabaseClient(BaseClient):
         file : str
             Attachment file path.
         """
-        log.info(self._request(request_type='add_attachment', file=file)['msg'])
+        self._request(request_type='add_attachment', file=file)
 
     def remove_attachment(self, name):
         """
@@ -189,7 +176,7 @@ class DatabaseClient(BaseClient):
         name : str
             Attachment name.
         """
-        log.info(self._request(request_type='remove_attachment', name=name)['msg'])
+        self._request(request_type='remove_attachment', name=name)
 
     def download_attachment(self, name, path):
         """
@@ -202,7 +189,7 @@ class DatabaseClient(BaseClient):
         path : str
             Output path.
         """
-        log.info(self._request(request_type='download_attachment', name=name, output_path=path)['msg'])
+        self._request(request_type='download_attachment', name=name, output_path=path)
 
     def new_batch(self, files, batch_name, comment=''):
         """
@@ -217,8 +204,7 @@ class DatabaseClient(BaseClient):
         comment : str
             Batch comment.
         """
-        log.info(self._request(request_type='new_batch', files=files,
-                               batch=batch_name, comment=comment)['msg'])
+        self._request(request_type='new_batch', files=files, batch=batch_name, comment=comment)
 
     def restore(self, batch_name):
         """
@@ -234,8 +220,7 @@ class DatabaseClient(BaseClient):
         if batch_name not in restore_points or batch_name == restore_points[-1]:
             raise ValueError(f"'{batch_name}' is not a valid restore point")
 
-        log.info('Restoring database...')
-        log.info(self._request(request_type='restore_database', batch=batch_name)['msg'])
+        self._request(request_type='restore_database', batch=batch_name)
 
     def query_from_file(self, file, double_precision=False):
         """
@@ -272,7 +257,6 @@ class DatabaseClient(BaseClient):
         pyarrow.RecordBatch
             Data queried.
         """
-        log.info('Processing query...')
         return self._request(request_type='query', table=table, fields=fields,
                              LIDs=LIDs, IDs=IDs, groups=groups,
                              geometry=geometry, sort_by_LID=sort_by_LID,
@@ -305,7 +289,6 @@ class Client(BaseClient):
         host, port = server_address.split(':')
         self.server_address = (host, int(port))
         self._request(request_type='authentication', user=user, password=password)
-        log.info('Logged in')
 
     @property
     def session(self):
@@ -314,7 +297,7 @@ class Client(BaseClient):
     def info(self):
 
         if self._authentication:
-            print(self._request(request_type='cluster_info')['msg'])
+            print(self._request(request_type='cluster_info').getvalue().decode())
         else:
             print('Not connected!')
 
@@ -329,12 +312,11 @@ class Client(BaseClient):
 
     def create_remote_database(self, database):
         data = self._request(is_redirected=True, request_type='create_database', path=database)
-        log.info(data['msg'])
         return DatabaseClient(self.server_address, database,
                               self._private_key, self._authentication, data['header'])
 
     def remove_remote_database(self, database):
-        log.info(self._request(request_type='remove_database', path=database)['msg'])
+        self._request(request_type='remove_database', path=database)
 
     @property
     def remote_databases(self):
@@ -345,14 +327,14 @@ class Client(BaseClient):
         return self._request(request_type='list_sessions')['sessions']
 
     def add_session(self, user, password, is_admin=False, create_allowed=False, databases=None):
-        log.info(self._request(request_type='add_session', session_hash=get_hash(f'{user}:{password}'),
-                               user=user, is_admin=is_admin, create_allowed=create_allowed, databases=databases)['msg'])
+        self._request(request_type='add_session', session_hash=get_hash(f'{user}:{password}'),
+                      user=user, is_admin=is_admin, create_allowed=create_allowed, databases=databases)
 
     def remove_session(self, user):
-        log.info(self._request(request_type='remove_session', user=user)['msg'])
+        self._request(request_type='remove_session', user=user)
 
     def sync_databases(self, nodes=None, databases=None):
         self._request(request_type='sync_databases', nodes=nodes, databases=databases)
 
     def shutdown(self, node=None):
-        log.info(self._request(request_type='shutdown', node=node)['msg'])
+        self._request(request_type='shutdown', node=node)
