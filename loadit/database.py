@@ -695,8 +695,6 @@ class Database(object):
                     fields_processed.add(field)
 
         mem_handler.update()
-        LIDs_queried = np.array(LIDs_queried, dtype=np.int64)
-        IDs_queried = np.array(IDs_queried, dtype=np.int64)
 
         # RecordBatch creation
         from loadit.queries import set_index
@@ -705,39 +703,28 @@ class Database(object):
         if mem_handler.level == 0:
             index_names = [self.header.tables[table]['columns'][0][0],
                            self.header.tables[table]['columns'][1][0]]
+            index = [LIDs_queried, IDs_queried]
             columns = mem_handler.fields[0]
-            index0 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
-            index1 = np.empty((len(LIDs_queried), len(IDs_queried)), dtype=np.int64)
-            set_index(LIDs_queried, IDs_queried, index0, index1)
-            arrays = [pa.array(index0.ravel(order)), pa.array(index1.ravel(order))]
-            arrays += [pa.array(mem_handler.data0[i, :, :].ravel(order)) for i in range(len(fields))]
+            arrays = [pa.array(mem_handler.data0[i, :, :].ravel(order)) for i in range(len(fields))]
         elif mem_handler.level == 1:
             index_names = [self.header.tables[table]['columns'][0][0], 'Group']
+            index = [LIDs_queried, list(groups)]
             columns = mem_handler.fields[1]
-            index0 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
-            index1 = np.empty((len(LIDs_queried), len(groups)), dtype=np.int64)
-            set_index(LIDs_queried, np.arange(len(groups), dtype=np.int64), index0, index1)
-            arrays = [pa.array(index0.ravel(order)),
-                      pa.DictionaryArray.from_arrays(pa.array(index1.ravel(order)), pa.array(list(groups)))]
-            arrays += [pa.array(mem_handler.data1[i, :, :].ravel(order)) for i in range(len(fields))]
+            arrays = [pa.array(mem_handler.data1[i, :, :].ravel(order)) for i in range(len(fields))]
         else:
             index_names = ['Group'] if groups else [self.header.tables[table]['columns'][1][0]]
+            index = [list(groups) if groups else IDs_queried]
             columns = [field + suffix for field in mem_handler.fields[2] for suffix in ('', LID_suffix)]
             data = {field: mem_handler.get(field).ravel() for field in columns}
-
-            if groups:
-                index = np.arange(len(groups), dtype=np.int64)
-                arrays = [pa.DictionaryArray.from_arrays(pa.array(index), pa.array(list(groups)))]
-            else:
-                arrays = [pa.array(IDs_queried)]
-
-            arrays += [pa.array(data[field]) for field in data]
+            arrays = [pa.array(data[field]) for field in data]
 
         log.info('Done!')
         query = {'table': table, 'fields': fields, 'LIDs': LIDs, 'IDs': IDs, 'groups': groups,
                  'geometry':geometry, 'sort_by_LID': sort_by_LID, 'double_precision': double_precision}
-        return pa.RecordBatch.from_arrays(arrays, index_names + columns,
-                                          metadata={b'index_columns': json.dumps(index_names).encode(),
+        return pa.RecordBatch.from_arrays(arrays, columns,
+                                          metadata={b'index_names': json.dumps(index_names).encode(),
+                                                    b'index': json.dumps(index).encode(),
+                                                    b'sorted_by': b'0' if sort_by_LID else b'1',
                                                     b'header': json.dumps(self.header.get_query_header()).encode(),
                                                     b'query': zlib.compress(json.dumps(query).encode())})
 
@@ -1112,7 +1099,7 @@ def is_abs(field):
         return field, False
 
 
-def get_dataframe(record_batch, set_index=True):
+def get_dataframe(record_batch):
     """
     Get a pandas dataframe from query record_batch output.
 
@@ -1120,18 +1107,29 @@ def get_dataframe(record_batch, set_index=True):
     ----------
     record_batch : pyarrow.RecordBatch
         RecordBatch queried.
-    set_index : bool, optional
-        Set DataFrame index.
 
     Returns
     -------
     pandas.DataFrame
         DataFrame queried.
     """
-    df = record_batch.to_pandas()
+    import pandas as pd
+    from loadit.queries import set_index
 
-    if set_index:
-        df.set_index(json.loads(record_batch.schema.metadata[b'index_columns'].decode()), inplace=True)
+    df = record_batch.to_pandas()
+    index = json.loads(record_batch.schema.metadata[b'index'])
+    index_names = json.loads(record_batch.schema.metadata[b'index_names'])
+
+    if len(index) == 1:
+        df.index = pd.Index(index[0], name=index_names[0])
+    else:
+        index0 = np.empty((len(index[0]), len(index[1])), dtype=np.int32)
+        index1 = np.empty((len(index[0]), len(index[1])), dtype=np.int32)
+        set_index(np.arange(len(index[0]), dtype=np.int32), np.arange(len(index[1]), dtype=np.int32), index0, index1)
+        order = 'C' if record_batch.schema.metadata[b'sorted_by'] == b'0' else 'F'
+        df.index = pd.MultiIndex(levels=index,
+                                 labels=[index0.ravel(order), index1.ravel(order)],
+                                 names=index_names)
 
     return df
 
@@ -1154,17 +1152,17 @@ def write_query(record_batch, output_file):
 
         with open(output_file, 'w') as f:
             f.write(record_batch.schema.metadata[b'header'].decode() + '\n')
-            get_dataframe(record_batch, False).to_csv(f, index=False)
+            get_dataframe(record_batch).to_csv(f, index=False)
 
     elif extension == '.xlsx':
-        get_dataframe(record_batch, False).to_excel(output_file)
+        get_dataframe(record_batch).to_excel(output_file)
     elif extension == '.parquet':
         pq.write_table(pa.Table.from_batches([record_batch]), output_file, version='2.0')
     elif extension == '.db':
         import sqlite3
 
         with sqlite3.connect(output_file) as conn:
-            get_dataframe(record_batch, False).to_sql(json.loads(zlib.decompress(record_batch.schema.metadata[b'query']))['table'], conn, index=False)
+            get_dataframe(record_batch).to_sql(json.loads(zlib.decompress(record_batch.schema.metadata[b'query']))['table'], conn, index=False)
 
     log.info('Done!')
 

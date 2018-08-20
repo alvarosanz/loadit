@@ -57,5 +57,5 @@ class ResultsPanel(wx.Panel):
 
     def copy_to_clipboard(self, event):
         log.info('Copying results to clipboard ...')
-        get_dataframe(self.results, False).to_clipboard()
+        get_dataframe(self.results).to_clipboard()
         log.info('Results copied to clipboard')

@@ -250,7 +250,7 @@ class DatabaseServer(socketserver.TCPServer):
 
         try:
             self.connection = Connection(connection_socket=request, private_key=self.private_key)
-            data = json.loads(self.connection.recv_secret().decode())
+            data = json.loads(self.connection.recv_secret())
 
             if 'master_key' in data:
 

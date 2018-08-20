@@ -5,7 +5,7 @@ import numpy as np
 np.seterr(invalid='ignore') # Ignore nan warnings
 
 
-@guvectorize(['(int64[:], int64[:], int64[:, :], int64[:, :])'],
+@guvectorize(['(int32[:], int32[:], int32[:, :], int32[:, :])'],
              '(n), (m) -> (n, m), (n, m)',
              target='cpu', nopython=True)
 def set_index(index0, index1, out0, out1):

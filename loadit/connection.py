@@ -95,7 +95,7 @@ class Connection(object):
             if data_type == '0': # bytes message
                 return buffer
             elif data_type == '1': # json message
-                return json.loads(buffer.read().decode())
+                return json.loads(buffer.read())
             elif data_type == '2': # debug log record
                 log.debug(buffer.read().decode())
             elif data_type == '3': # info log record
