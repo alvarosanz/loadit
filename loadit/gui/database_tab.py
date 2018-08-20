@@ -20,7 +20,7 @@ class DatabaseTab(wx.Panel):
         self.is_local = is_local
 
         self.notebook = wx.Notebook(self)
-        self.database_log_panel = DatabaseLogPanel(self.notebook)
+        self.database_log_panel = DatabaseLogPanel(self.notebook, self.root)
         self.log = self.database_log_panel.log
         self.results_panel = ResultsPanel(self.notebook, self.root, self.log)
         self.single_query_panel = QueryPanel(self.notebook, self.root, self.database, self.results_panel, self.log)
