@@ -95,22 +95,22 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
             connection.send(msg={'redirection_address': self.server.acquire_worker(node=node, database=query['path'])})
 
         if log_request:
+            log_msg = "ip: {}, user: {}, request: {}, database: {}, in: {}, out: {}"
 
             if query['request_type'] == 'release_worker':
-                user = query['user']
-                client_address = query['client_address']
-                request_type = query['request']
-                nbytes_in = query['nbytes_in']
-                nbytes_out = query['nbytes_out']
+                self.server.log.info(log_msg.format(query['client_address'],
+                                                    query['user'],
+                                                    query['request'],
+                                                    query['database'],
+                                                    humansize(query['nbytes_in']),
+                                                    humansize(query['nbytes_out'])))
             else:
-                user = self.server.current_session['user']
-                client_address = self.request.getpeername()[0]
-                request_type = query['request_type']
-                nbytes_in = connection.nbytes_in
-                nbytes_out = connection.nbytes_out
-
-            self.server.log.info("user: {} ({}), request: {}, in: {}, out: {}".format(user, client_address, request_type,
-                                                                                      humansize(nbytes_in), humansize(nbytes_out)))
+                self.server.log.info(log_msg.format(self.request.getpeername()[0],
+                                                    self.server.current_session['user'],
+                                                    query['request_type'],
+                                                    None,
+                                                    humansize(connection.nbytes_in),
+                                                    humansize(connection.nbytes_out)))
 
 
 class WorkerQueryHandler(socketserver.BaseRequestHandler):
@@ -134,6 +134,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
         elif query['request_type'] == 'recv_databases':
             self.server.recv_databases(connection)
         elif query['request_type'] == 'remove_database':
+            self.server.current_database = query['path']
 
             with self.server.database_lock.acquire(query['path']):
                 shutil.rmtree(os.path.join(self.server.root_path, query['path']))
@@ -141,6 +142,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
             connection.send(msg={'msg': "Database '{}' removed".format(query['path'])})
             del self.server.databases[query['path']]
         else:
+            self.server.current_database = query['path']
 
             with self.server.database_lock.acquire(query['path'],
                                                    block=(query['request_type'] in ('create_database',
@@ -558,6 +560,7 @@ class WorkerServer(DatabaseServer):
         self.log = logging.getLogger()
         self.central = central_address
         self.databases = databases
+        self.current_database = None
         self.main_lock = main_lock
         self.database_lock = database_lock
         self.backup = backup
@@ -601,13 +604,15 @@ class WorkerServer(DatabaseServer):
                     'nbytes_out': self.connection.nbytes_out,
                     'request': self.current_session['request_type'],
                     'client_address': client_address,
-                    'user': self.current_session['user']}
+                    'user': self.current_session['user'],
+                    'database': self.current_database}
 
             if self.current_session['database_modified']:
                 data['databases'] = self.databases._getvalue()
 
             send(self.central, data, master_key=self.master_key, private_key=self.private_key)
 
+        self.current_database = None
         self.current_session = None
         self.connection = None
 
