@@ -286,9 +286,13 @@ class Client(BaseClient):
         self._authentication = None
 
     def connect(self, server_address, user=None, password=None):
+        self.logout()
         host, port = server_address.split(':')
         self.server_address = (host, int(port))
         self._request(request_type='authentication', user=user, password=password)
+
+    def logout(self):
+        self._authentication = None
 
     @property
     def session(self):

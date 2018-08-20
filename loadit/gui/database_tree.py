@@ -235,4 +235,4 @@ class DatabaseTree(wx.lib.agw.hypertreelist.HyperTreeList):
                     self.database.remove_attachment(self.GetSelection().GetText())
                     self.update()
                 except Exception as e:
-                    lof.error(str(e))
+                    log.error(str(e))

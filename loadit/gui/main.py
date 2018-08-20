@@ -47,13 +47,13 @@ class MainWindow(wx.Frame):
         self.remotemenu = wx.Menu()
         self.menubar.Append(self.remotemenu, '&Remote')
         self.remotemenu_connect = self.remotemenu.Append(wx.ID_ANY, 'Connect', 'Connect to the remote server')
-        self.remotemenu_disconnect = self.remotemenu.Append(wx.ID_ANY, 'Disconnect', 'Disconnect from the remote server')
+        self.remotemenu_logout = self.remotemenu.Append(wx.ID_ANY, 'Log Out', 'Log out session')
         self.remotemenu.AppendSeparator()
         self.remotemenu_new = self.remotemenu.Append(wx.ID_ANY, 'New', 'Create a new remote database')
         self.remotemenu_open= self.remotemenu.Append(wx.ID_ANY, 'Open', 'Open an existing remote database')
         self.remotemenu.AppendSeparator()
         self.Bind(wx.EVT_MENU, self.on_connect, self.remotemenu_connect)
-        self.Bind(wx.EVT_MENU, self.on_disconnect, self.remotemenu_disconnect)
+        self.Bind(wx.EVT_MENU, self.on_logout, self.remotemenu_logout)
         self.Bind(wx.EVT_MENU, self.on_new_remote, self.remotemenu_new)
         self.Bind(wx.EVT_MENU, self.on_open_remote, self.remotemenu_open)
 
@@ -82,7 +82,7 @@ class MainWindow(wx.Frame):
     def update_menubar(self, event):
         # Remote menu
         self.remotemenu_connect.Enable(True)
-        self.remotemenu_disconnect.Enable(False)
+        self.remotemenu_logout.Enable(False)
         self.remotemenu_new.Enable(False)
         self.remotemenu_open.Enable(False)
         self.remotemenu_management.Enable(False)
@@ -90,7 +90,7 @@ class MainWindow(wx.Frame):
         if self.client._authentication:
             session = self.client.session
             self.remotemenu_connect.Enable(False)
-            self.remotemenu_disconnect.Enable(True)
+            self.remotemenu_logout.Enable(True)
 
             if session['create_allowed']:
                 self.remotemenu_new.Enable(True)
@@ -157,10 +157,10 @@ class MainWindow(wx.Frame):
                     self.client.connect(dialog.address, dialog.user, dialog.password)
                     self.statusbar.update_status()
                 except Exception as e:
-                    lof.error(str(e))
+                    log.error(str(e))
 
-    def on_disconnect(self, event):
-        self.client._authentication = None
+    def on_logout(self, event):
+        self.client.logout()
 
         for tab in self.remote_tabs:
             self.notebook.DeletePage(self.notebook.GetPageIndex(tab))
