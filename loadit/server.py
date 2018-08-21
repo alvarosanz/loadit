@@ -98,12 +98,14 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
             log_msg = "ip: {}, user: {}, request: {}, database: {}, in: {}, out: {}"
 
             if query['request_type'] == 'release_worker':
-                self.server.log.info(log_msg.format(query['client_address'],
-                                                    query['user'],
-                                                    query['request'],
-                                                    query['database'],
-                                                    humansize(query['nbytes_in']),
-                                                    humansize(query['nbytes_out'])))
+
+                if not query['is_error']:
+                    self.server.log.info(log_msg.format(query['client_address'],
+                                                        query['user'],
+                                                        query['request'],
+                                                        query['database'],
+                                                        humansize(query['nbytes_in']),
+                                                        humansize(query['nbytes_out'])))
             else:
                 self.server.log.info(log_msg.format(self.request.getpeername()[0],
                                                     self.server.current_session['user'],
@@ -234,11 +236,10 @@ class DatabaseServer(socketserver.TCPServer):
         self._done.clear()
 
     def handle_error(self, request, client_address):
-        tb = traceback.format_exc()
-        self.log.error(tb)
+        self.current_session['is_error'] = True
 
         try:
-            self.connection.send(exception=tb)
+            self.connection.send(exception=traceback.format_exc())
         except BrokenPipeError:
             pass
 
@@ -308,6 +309,7 @@ class DatabaseServer(socketserver.TCPServer):
 
     def check_session(self, query):
         self.current_session['request_type'] = query['request_type']
+        self.current_session['is_error'] = False
 
         if not self.current_session['is_admin']:
 
@@ -605,7 +607,8 @@ class WorkerServer(DatabaseServer):
                     'request': self.current_session['request_type'],
                     'client_address': client_address,
                     'user': self.current_session['user'],
-                    'database': self.current_database}
+                    'database': self.current_database,
+                    'is_error': self.current_session['is_error']}
 
             if self.current_session['database_modified']:
                 data['databases'] = self.databases._getvalue()
