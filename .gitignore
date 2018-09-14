@@ -7,3 +7,5 @@
 *.code-workspace
 .vscode
 *.log
+/loadit/scripts/dist
+/loadit/scripts/build

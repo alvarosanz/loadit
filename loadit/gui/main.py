@@ -7,6 +7,7 @@ from loadit.client import Client
 from loadit.gui.statusbar import CustomStatusBar
 from loadit.gui.connect_dialog import ConnectDialog
 from loadit.gui.database_tab import DatabaseTab
+from loadit.misc import get_resource_path
 import loadit.log
 import logging
 
@@ -21,6 +22,11 @@ class MainWindow(wx.Frame):
         super().__init__(parent, title=title, size=size)
         self.SetMinSize(size)
         self.client = Client()
+
+        # Set icon
+        path = get_resource_path('icon.png')
+        icon = wx.Icon(path, wx.BITMAP_TYPE_PNG)
+        self.SetIcon(icon)
 
         # Statusbar
         self.statusbar = CustomStatusBar(self)
