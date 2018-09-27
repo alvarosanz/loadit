@@ -5,7 +5,7 @@ import jwt
 import time
 import pyarrow as pa
 from loadit.database import DatabaseHeader, Database, create_database, parse_query
-from loadit.connection import Connection, get_private_key
+from loadit.connection import Connection
 from loadit.misc import get_hash, humansize
 import logging
 
@@ -18,6 +18,30 @@ class BaseClient(object):
     Handles a remote connection.
     """
 
+    def __init__(self):
+        self.server_address = None
+        self._authentication = None
+
+    def connect(self, server_address, user=None, password=None):
+        self.logout()
+        host, port = server_address.split(':')
+        self.server_address = (host, int(port))
+        self._request(request_type='authentication', user=user, password=password)
+
+    def logout(self):
+        self._authentication = None
+
+    @property
+    def session(self):
+        return jwt.decode(self._authentication, verify=False)
+
+    def info(self):
+
+        if self._authentication:
+            print(self._request(request_type='cluster_info').getvalue().decode())
+        else:
+            print('Not connected!')
+
     def authenticate(self, connection, user=None, password=None):
         """
         Authenticate with the server (using a JSON Web Token).
@@ -29,7 +53,7 @@ class BaseClient(object):
         """
 
         if self._authentication:
-            connection.send_secret(json.dumps({'authentication': self._authentication.decode()}).encode())
+            connection.send(self._authentication)
         else:
             from loadit.__init__ import __version__
 
@@ -39,11 +63,11 @@ class BaseClient(object):
             if not password:
                 password = getpass.getpass('password: ')
 
-            connection.send_secret(json.dumps({'user': user,
-                                               'password': password,
-                                               'request': 'authentication',
-                                               'version': __version__}).encode())
-            self._authentication = connection.recv_secret()
+            connection.send(msg={'user': user,
+                                 'password': password,
+                                 'request': 'authentication',
+                                 'version': __version__})
+            self._authentication = connection.recv().read()
 
         connection.recv()
 
@@ -51,7 +75,7 @@ class BaseClient(object):
         """
         Request something to the server.
         """
-        connection = Connection(self.server_address, private_key=self._private_key)
+        connection = Connection(self.server_address)
 
         try:
             # Authentication
@@ -114,7 +138,7 @@ class DatabaseClient(BaseClient):
     Handles a remote database.
     """
 
-    def __init__(self, server_address, path, private_key, authentication, header=None):
+    def __init__(self, server_address, path, authentication, header=None):
         """
         Initialize a DatabaseClient instance.
 
@@ -124,8 +148,6 @@ class DatabaseClient(BaseClient):
             Server address (i.e. ('192.168.0.9', 8080)).
         path : str
             Database remote path.
-        private_key : cryptography.hazmat.backends.openssl.ec._EllipticCurvePrivateKey
-            Private key.
         authentication : bytes
             Server authentication (JSON Web Token).
         header : dict, optional
@@ -133,7 +155,6 @@ class DatabaseClient(BaseClient):
         """
         self.server_address = server_address
         self.path = path
-        self._private_key = private_key
         self._authentication = authentication
 
         if header:
@@ -280,44 +301,18 @@ class Client(BaseClient):
     Handles a remote connection.
     """
 
-    def __init__(self):
-        self.server_address = None
-        self._private_key = get_private_key()
-        self._authentication = None
-
-    def connect(self, server_address, user=None, password=None):
-        self.logout()
-        host, port = server_address.split(':')
-        self.server_address = (host, int(port))
-        self._request(request_type='authentication', user=user, password=password)
-
-    def logout(self):
-        self._authentication = None
-
-    @property
-    def session(self):
-        return jwt.decode(self._authentication, verify=False)
-
-    def info(self):
-
-        if self._authentication:
-            print(self._request(request_type='cluster_info').getvalue().decode())
-        else:
-            print('Not connected!')
-
     def load_database(self, database):
         return Database(database)
 
     def load_remote_database(self, database):
-        return DatabaseClient(self.server_address, database, self._private_key, self._authentication)
+        return DatabaseClient(self.server_address, database, self._authentication)
 
     def create_database(self, database):
         return create_database(database)
 
     def create_remote_database(self, database):
         data = self._request(is_redirected=True, request_type='create_database', path=database)
-        return DatabaseClient(self.server_address, database,
-                              self._private_key, self._authentication, data['header'])
+        return DatabaseClient(self.server_address, database, self._authentication, data['header'])
 
     def remove_remote_database(self, database):
         self._request(request_type='remove_database', path=database)

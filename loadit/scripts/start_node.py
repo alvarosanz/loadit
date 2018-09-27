@@ -10,6 +10,8 @@ if __name__ == '__main__':
                         help='Server address of the central server (i.e. 192.168.0.154:8080)')
     parser.add_argument('--path', dest='root_path', metavar='ROOT_PATH', default=os.getcwd(),
                         help='folder containing the databases (by default is the current working directory)')
+    parser.add_argument('--certificate', dest='certfile', metavar='CERTIFICATE',
+                        help='Certificate file')
     parser.add_argument('--backup', dest='backup', action='store_const',
                         const=True, default=False,
                         help='activate backup mode. In backup mode, the node will perform a backup of all the databases present at the central server')
@@ -20,6 +22,6 @@ if __name__ == '__main__':
 
     import loadit
     host, port = args.server_address.split(':')
-    loadit.start_node((host, int(port)), args.root_path, args.backup, args.debug)
+    loadit.start_node((host, int(port)), args.root_path, args.certfile, args.backup, args.debug)
 else:
     import loadit

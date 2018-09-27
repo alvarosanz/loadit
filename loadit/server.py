@@ -10,6 +10,8 @@ import binascii
 import logging
 import traceback
 import socketserver
+import ssl
+import secrets
 from contextlib import contextmanager
 import threading
 import pyarrow as pa
@@ -17,7 +19,7 @@ from multiprocessing import Process, cpu_count, Event, Manager, Lock
 from loadit.database import Database, create_database, parse_query
 from loadit.sessions import Sessions
 from loadit.tables_specs import get_tables_specs
-from loadit.connection import Connection, get_master_key, get_private_key, get_ip, find_free_port
+from loadit.connection import Connection, get_ip, find_free_port
 import loadit.log as log
 from loadit.misc import humansize, get_hasher, hash_bytestr
 
@@ -218,22 +220,24 @@ class DatabaseServer(socketserver.TCPServer):
     allow_reuse_address = True
     request_queue_size = 5
 
-    def __init__(self, server_address, query_handler, root_path, debug=False):
+    def __init__(self, server_address, query_handler, root_path, certfile, debug=False):
+        self.context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        self.context.load_cert_chain(certfile)
         super().__init__(server_address, query_handler)
         self.root_path = root_path
+        self.master_key = None
         self.databases = None
-        self.set_keys()
         self.current_session = None
         self._debug = debug
         self._done = Event()
 
-    def set_keys(self):
-        self.master_key = None
-        self.private_key = get_private_key()
-
     def wait(self):
         self._done.wait()
         self._done.clear()
+
+    def server_activate(self):
+        super().server_activate()
+        self.socket = self.context.wrap_socket(self.socket, server_side=True)
 
     def handle_error(self, request, client_address):
         self.current_session['is_error'] = True
@@ -250,51 +254,51 @@ class DatabaseServer(socketserver.TCPServer):
         error_msg = 'Access denied!'
 
         try:
-            self.connection = Connection(connection_socket=request, private_key=self.private_key)
-            data = json.loads(self.connection.recv_secret())
+            self.connection = Connection(connection_socket=request)
+            data = self.connection.recv()
 
-            if 'master_key' in data:
+            try:
+                bytes = data.read()
 
-                if self.master_key != data['master_key'].encode():
-                    raise PermissionError()
+                if bytes == self.master_key:
+                    self.current_session = {'is_admin': True}
+                else:
 
-                self.current_session = {'is_admin': True}
+                    try:
+                        self.current_session = jwt.decode(bytes, self.master_key)
+                    except Exception:
+                        error_msg = 'Invalid token!'
+                        raise PermissionError()
+                    
+            except AttributeError:
 
-            elif 'password' in data:
+                if 'password' in data:
 
-                try:
-                    self.current_session = self.sessions.get_session(data['user'], data['password'])
-                except KeyError:
-                    error_msg = 'Wrong username or password!'
-                    raise PermissionError()
-
-                from loadit.__init__ import __version__
-
-                if data['version'].split('.')[-1] != __version__.split('.')[-1]:
-                    error_msg = f"Not supported version! Update to version: '{__version__}'"
-                    raise PermissionError()
-
-                if data['request'] == 'master_key':
-
-                    if not self.current_session['is_admin']:
-                        error_msg = 'Not enough privileges!'
+                    try:
+                        self.current_session = self.sessions.get_session(data['user'], data['password'])
+                    except KeyError:
+                        error_msg = 'Wrong username or password!'
                         raise PermissionError()
 
-                    self.connection.send_secret(self.master_key)
+                    from loadit.__init__ import __version__
+
+                    if data['version'].split('.')[-1] != __version__.split('.')[-1]:
+                        error_msg = f"Not supported version! Update to version: '{__version__}'"
+                        raise PermissionError()
+
+                    if data['request'] == 'master_key':
+
+                        if not self.current_session['is_admin']:
+                            error_msg = 'Not enough privileges!'
+                            raise PermissionError()
+
+                        self.connection.send(self.master_key)
+                    else:
+                        authentication = jwt.encode(self.current_session, self.master_key)
+                        self.connection.send(authentication)
+
                 else:
-                    authentication = jwt.encode(self.current_session, self.master_key)
-                    self.connection.send_secret(authentication)
-
-            elif 'authentication' in data:
-
-                try:
-                    self.current_session = jwt.decode(data['authentication'].encode(), self.master_key)
-                except Exception:
-                    error_msg = 'Invalid token!'
                     raise PermissionError()
-
-            else:
-                raise PermissionError()
 
             self.connection.send(b'Access granted!')
             return True
@@ -305,7 +309,6 @@ class DatabaseServer(socketserver.TCPServer):
         except Exception:
             self.handle_error(request, client_address)
             return False
-
 
     def check_session(self, query):
         self.current_session['request_type'] = query['request_type']
@@ -329,16 +332,34 @@ class DatabaseServer(socketserver.TCPServer):
             self.current_session['database_modified'] = True
         else:
             self.current_session['database_modified'] = False
+            
+    def send(self, address, msg, recv=False):
+
+        try:
+            connection = Connection(address)
+            connection.send(self.master_key)
+            connection.recv()
+            connection.send(msg=msg)
+
+            if recv:
+                return connection.recv()
+
+        finally:
+            connection.kill()
+
+    def request(self, address, msg):
+        return self.send(address, msg, recv=True)
 
 
 class CentralServer(DatabaseServer):
 
-    def __init__(self, root_path, debug=False):
-        super().__init__((get_ip(), SERVER_PORT), CentralQueryHandler, root_path, debug)
+    def __init__(self, root_path, certfile, debug=False):
+        super().__init__((get_ip(), SERVER_PORT), CentralQueryHandler, root_path, certfile, debug)
+        self.certfile = certfile
         self.log = logging.getLogger('central_server')
         self.refresh_databases()
         self.sessions = None
-        self.master_key = get_master_key()
+        self.master_key = secrets.token_bytes()
         self.nodes = dict()
 
     def start(self, sessions_file=None):
@@ -368,7 +389,7 @@ class CentralServer(DatabaseServer):
         manager = Manager()
         databases = manager.dict(self.databases)
         locked_databases = manager.dict()
-        start_workers(self.server_address, self.root_path, manager, 'admin', password, databases, locked_databases,
+        start_workers(self.server_address, self.root_path, self.certfile, manager, 'admin', password, databases, locked_databases,
                       n_workers=cpu_count() - 1, debug=self._debug)
         print('Address: {}:{}'.format(*self.server_address))
         log.disable_console()
@@ -386,8 +407,7 @@ class CentralServer(DatabaseServer):
     def shutdown_node(self, node):
 
         for worker in list(self.nodes[node].workers):
-            send(worker, {'request_type': 'shutdown'},
-                 master_key=self.master_key, private_key=self.private_key)
+            self.send(worker, {'request_type': 'shutdown'})
 
     def info(self):
         info = list()
@@ -556,9 +576,9 @@ class DatabaseLock(object):
 
 class WorkerServer(DatabaseServer):
 
-    def __init__(self, server_address, central_address, root_path,
+    def __init__(self, server_address, central_address, root_path, certfile,
                  databases, main_lock, database_lock, backup=False, debug=False):
-        super().__init__(server_address, WorkerQueryHandler, root_path, debug)
+        super().__init__(server_address, WorkerQueryHandler, root_path, certfile, debug)
         self.log = logging.getLogger()
         self.central = central_address
         self.databases = databases
@@ -571,13 +591,13 @@ class WorkerServer(DatabaseServer):
     def start(self, user, password):
 
         try:
-            connection = Connection(self.central, private_key=self.private_key)
+            connection = Connection(self.central)
             from loadit.__init__ import __version__
-            connection.send_secret(json.dumps({'user': user,
-                                               'password': password,
-                                               'request': 'master_key',
-                                               'version': __version__}).encode())
-            self.master_key = connection.recv_secret()
+            connection.send(msg={'user': user,
+                                 'password': password,
+                                 'request': 'master_key',
+                                 'version': __version__})
+            self.master_key = connection.recv().read()
             connection.send(msg={'request_type': 'add_worker',
                                  'worker_address': self.server_address,
                                  'databases': self.databases._getvalue(),
@@ -589,9 +609,8 @@ class WorkerServer(DatabaseServer):
         self.serve_forever()
 
     def shutdown(self):
-        send(self.central, {'request_type': 'remove_worker',
-                            'worker_address': self.server_address},
-             master_key=self.master_key, private_key=self.private_key)
+        self.send(self.central, {'request_type': 'remove_worker',
+                                 'worker_address': self.server_address})
         super().shutdown()
 
     def shutdown_request(self, request):
@@ -613,7 +632,7 @@ class WorkerServer(DatabaseServer):
             if self.current_session['database_modified']:
                 data['databases'] = self.databases._getvalue()
 
-            send(self.central, data, master_key=self.master_key, private_key=self.private_key)
+            self.send(self.central, data)
 
         self.current_database = None
         self.current_session = None
@@ -631,13 +650,12 @@ class WorkerServer(DatabaseServer):
             databases = self.databases
 
         for node, backup in nodes.items():
-            worker = tuple(request(self.central, {'request_type': 'acquire_worker', 'node': node},
-                                   master_key=self.master_key, private_key=self.private_key)[1]['worker_address'])
+            worker = tuple(self.request(self.central, {'request_type': 'acquire_worker', 'node': node})[1]['worker_address'])
             client_connection.send(msg={'msg': f"Syncing node '{node}'..."})
 
             try:
-                connection = Connection(worker, private_key=self.private_key)
-                connection.send_secret(json.dumps({'master_key': self.master_key.decode()}).encode())
+                connection = Connection(worker)
+                connection.send(self.master_key)
                 connection.recv()
                 connection.send(msg={'request_type': 'recv_databases'})
                 remote_databases = connection.recv()
@@ -704,16 +722,16 @@ class WorkerServer(DatabaseServer):
             return self.databases._getvalue()
 
 
-def start_worker(server_address, central_address, root_path,
+def start_worker(server_address, central_address, root_path, certfile,
                  databases, main_lock, locks, locked_databases, user, password, backup, debug):
     import loadit.queries # Pre-load this heavy module
     database_lock = DatabaseLock(main_lock, locks, locked_databases)
-    worker = WorkerServer(server_address, central_address, root_path,
+    worker = WorkerServer(server_address, central_address, root_path, certfile,
                           databases, main_lock, database_lock, backup, debug)
     worker.start(user, password)
 
 
-def start_workers(central_address, root_path, manager, user, password, databases, locked_databases,
+def start_workers(central_address, root_path, certfile, manager, user, password, databases, locked_databases,
                   n_workers=None, backup=False, debug=False):
 
     if not n_workers:
@@ -725,7 +743,7 @@ def start_workers(central_address, root_path, manager, user, password, databases
     workers = list()
 
     for i in range(n_workers):
-        workers.append(Process(target=start_worker, args=((host, find_free_port()), central_address, root_path,
+        workers.append(Process(target=start_worker, args=((host, find_free_port()), central_address, root_path, certfile,
                                                           databases, main_lock, locks, locked_databases,
                                                           user, password, backup, debug)))
         workers[-1].start()
@@ -733,13 +751,13 @@ def start_workers(central_address, root_path, manager, user, password, databases
     return workers
 
 
-def start_node(central_address, root_path, backup=False, debug=False):
+def start_node(central_address, root_path, certfile, backup=False, debug=False):
     user = input('user: ')
     password = getpass.getpass('password: ')
     manager = Manager()
     databases = manager.dict(get_local_databases(root_path))
     locked_databases = manager.dict()
-    workers = start_workers(central_address, root_path, manager, user, password, databases, locked_databases,
+    workers = start_workers(central_address, root_path, certfile, manager, user, password, databases, locked_databases,
                             backup=backup, debug=debug)
 
     for worker in workers:
@@ -762,28 +780,6 @@ def get_database_hash(header_file):
 
     with open(header_file, 'rb') as f:
         return hash_bytestr(f, get_hasher('sha256'))
-
-
-def send(address, msg, master_key=None, private_key=None, recv=False):
-
-    try:
-        connection = Connection(address, private_key=private_key)
-
-        if connection.private_key:
-            connection.send_secret(json.dumps({'master_key': master_key.decode()}).encode())
-            connection.recv()
-
-        connection.send(msg=msg)
-
-        if recv:
-            return connection.recv()
-
-    finally:
-        connection.kill()
-
-
-def request(address, msg, master_key=None, private_key=None):
-    return send(address, msg, master_key, private_key, recv=True)
 
 
 def get_batch_message(batch):

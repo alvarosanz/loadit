@@ -15,8 +15,7 @@ setup(
     license='MIT',
     keywords='NASTRAN FEM engineering',
     long_description=open('README.rst').read(),
-    install_requires=['numpy>=1.14.3', 'pandas>=0.22.0', 'numba>=0.35.0',
-                     'pyarrow>=0.9.0', 'pyjwt>=1.6.1', 'cryptography>=2.2.2',
-                     'wxpython>=4.0.1'],
+    install_requires=['numpy>=1.14.3', 'pyarrow>=0.9.0', 'numba>=0.35.0',
+                      'pandas>=0.22.0', 'pyjwt>=1.6.1', 'wxpython>=4.0.1'],
     python_requires='>=3.6',
 )

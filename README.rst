@@ -14,10 +14,9 @@ Requirements
 
 * python 3.6 (or later)
 * numpy
-* pandas
-* numba
 * pyarrow
-* cryptography
+* numba
+* pandas
 * pyjwt
 * wxpython
 

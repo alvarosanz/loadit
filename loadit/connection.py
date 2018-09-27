@@ -1,11 +1,6 @@
 import os
-import base64
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.fernet import Fernet
 import socket
+import ssl
 import json
 import numpy as np
 from io import BytesIO
@@ -17,18 +12,22 @@ import logging
 log = logging.getLogger()
 
 
+SSL_CONTEXT = ssl.create_default_context()
+SSL_CONTEXT.check_hostname = False
+SSL_CONTEXT.verify_mode = ssl.VerifyMode.CERT_NONE
+
+
 class Connection(object):
 
-    def __init__(self, server_address=None, connection_socket=None,
-                 private_key=None, header_size=15, buffer_size=4096):
+    def __init__(self, server_address=None, connection_socket=None, ssl_context=SSL_CONTEXT,
+                 header_size=15, buffer_size=4096):
+        self.ssl_context = SSL_CONTEXT
 
         if server_address:
             self.connect(server_address)
         else:
             self.socket = connection_socket
 
-        self.encryptor = None
-        self.private_key = private_key
         self.header_size = header_size
         self.buffer_size = buffer_size
         self.pending_data = b''
@@ -36,12 +35,11 @@ class Connection(object):
         self.nbytes_out = 0
 
     def connect(self, server_address):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket = self.ssl_context.wrap_socket(socket.socket())
         self.socket.connect(server_address)
 
     def kill(self):
         self.socket.close()
-        self.encryptor = None
 
     def send(self, bytes=None, msg=None, debug_msg=None, info_msg=None, warning_msg=None, error_msg=None, critical_msg=None, exception=None):
 
@@ -161,11 +159,15 @@ class Connection(object):
         self.socket.send(str(size).zfill(self.header_size).encode())
 
         with open(file, 'rb') as f:
-            sended = 1
 
-            while sended:
-                sended = self.socket.send(f.read(self.buffer_size))
-        
+            while True:
+                bytes = f.read(self.buffer_size)
+
+                if not bytes:
+                    break
+                
+                self.socket.send(bytes)
+                
         self.nbytes_out += self.header_size + size
         self.recv()
 
@@ -182,46 +184,9 @@ class Connection(object):
         self.nbytes_in += self.header_size + size
         self.send(b'OK')
 
-    def send_secret(self, secret):
-
-        if not self.encryptor:
-            self.send(self.private_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
-                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo))
-            public_key_other = serialization.load_pem_public_key(self.recv().read(), backend=default_backend())
-            self.encryptor = Fernet(self._get_key(public_key_other))
-
-        self.send(self.encryptor.encrypt(secret))
-
-    def recv_secret(self):
-
-        if not self.encryptor:
-            public_key_other = serialization.load_pem_public_key(self.recv().read(),
-                                                                 backend=default_backend())
-            self.send(self.private_key.public_key().public_bytes(encoding=serialization.Encoding.PEM,
-                                                                 format=serialization.PublicFormat.SubjectPublicKeyInfo))
-            self.encryptor = Fernet(self._get_key(public_key_other))
-
-        return self.encryptor.decrypt(self.recv().read())
-
-    def _get_key(self, public_key_other):
-        shared_key = self.private_key.exchange(ec.ECDH(), public_key_other)
-        return base64.urlsafe_b64encode(HKDF(algorithm=hashes.SHA256(),
-                                             length=32,
-                                             salt=None,
-                                             info=b'handshake data',
-                                             backend=default_backend()).derive(shared_key))
-
-
-def get_private_key():
-    return ec.generate_private_key(ec.SECP384R1(), default_backend())
-
-
-def get_master_key():
-    return Fernet.generate_key()
-
 
 def get_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s = socket.socket(type=socket.SOCK_DGRAM)
     try:
         # doesn't even have to be reachable
         s.connect(('10.255.255.255', 1))
@@ -233,7 +198,7 @@ def get_ip():
 
 
 def find_free_port():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = socket.socket()
     s.bind(('localhost', 0))
     port = s.getsockname()[1]
     s.close()
