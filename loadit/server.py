@@ -1,12 +1,10 @@
 import jwt
 import getpass
 import os
-import sys
 import time
 import shutil
 from pathlib import Path
 import json
-import binascii
 import logging
 import traceback
 import socketserver
@@ -18,7 +16,6 @@ import pyarrow as pa
 from multiprocessing import Process, cpu_count, Event, Manager, Lock
 from loadit.database import Database, create_database, parse_query
 from loadit.sessions import Sessions
-from loadit.tables_specs import get_tables_specs
 from loadit.connection import Connection, get_ip, find_free_port
 import loadit.log as log
 from loadit.misc import humansize, get_hasher, hash_bytestr
@@ -32,17 +29,18 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
     def handle(self):
         connection = self.server.connection
         query = connection.recv()
-        self.server.check_session(query)
+        self.server.authorize(query)
+        request_type = query['request_type']
         log_request = True
 
         # WORKER REQUESTS
-        if query['request_type'] == 'add_worker':
+        if request_type == 'add_worker':
             self.server.add_worker(tuple(query['worker_address']), query['databases'], query['backup'])
-        elif query['request_type'] == 'remove_worker':
+        elif request_type == 'remove_worker':
             self.server.remove_worker(tuple(query['worker_address']))
-        elif query['request_type'] == 'acquire_worker':
+        elif request_type == 'acquire_worker':
             connection.send(msg={'worker_address': self.server.acquire_worker(node=query['node'])})
-        elif query['request_type'] == 'release_worker':
+        elif request_type == 'release_worker':
 
             if 'databases' in query:
                 self.server.nodes[query['worker_address'][0]].databases = query['databases']
@@ -51,13 +49,13 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
                     self.server.databases = query['databases']
 
             self.server.release_worker(tuple(query['worker_address']))
-        elif query['request_type'] == 'list_databases':
+        elif request_type == 'list_databases':
             connection.send(msg=self.server.databases)
 
         # CLIENT REQUESTS
-        elif query['request_type'] == 'authentication':
+        elif request_type == 'authentication':
             connection.send(msg={'msg': 'Logged in'})
-        elif query['request_type'] == 'shutdown':
+        elif request_type == 'shutdown':
 
             if query['node']:
                 self.server.shutdown_node(query['node'])
@@ -66,30 +64,30 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
                 threading.Thread(target=self.server.shutdown).start()
                 connection.send(msg={'msg': 'Cluster shutdown'})
 
-        elif query['request_type'] == 'cluster_info':
+        elif request_type == 'cluster_info':
             connection.send(self.server.info().encode())
-        elif query['request_type'] == 'add_session':
+        elif request_type == 'add_session':
             self.server.sessions.add_session(query['user'], session_hash=query['session_hash'],
                                              is_admin=query['is_admin'],
                                              create_allowed=query['create_allowed'],
                                              databases=query['databases'])
             connection.send(msg={'msg': "User '{}' added".format(query['user'])})
-        elif query['request_type'] == 'remove_session':
+        elif request_type == 'remove_session':
             self.server.sessions.remove_session(query['user'])
             connection.send(msg={'msg': "User '{}' removed".format(query['user'])})
-        elif query['request_type'] == 'list_sessions':
+        elif request_type == 'list_sessions':
             connection.send(msg={'sessions': list(self.server.sessions.sessions.values())})
-        elif query['request_type'] == 'sync_databases':
+        elif request_type == 'sync_databases':
             self.server.sync_databases(query['nodes'], query['databases'], connection)
-        else:
+        else: # REDIRECTED REQUESTS
             log_request = False
 
-            if query['request_type'] != 'create_database' and query['path'] not in self.server.databases:
+            if request_type != 'create_database' and query['path'] not in self.server.databases:
                 raise ValueError("Database '{}' not available!".format(query['path']))
 
-            if  query['request_type'] in ('create_database', 'new_batch',
-                                          'restore_database', 'remove_database',
-                                          'add_attachment', 'remove_attachment'):
+            if  request_type in ('create_database', 'new_batch',
+                                 'restore_database', 'remove_database',
+                                 'add_attachment', 'remove_attachment'):
                 node = self.server.server_address[0]
             else:
                 node = None
@@ -99,7 +97,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
         if log_request:
             log_msg = "ip: {}, user: {}, request: {}, database: {}, in: {}, out: {}"
 
-            if query['request_type'] == 'release_worker':
+            if request_type == 'release_worker':
 
                 if not query['is_error']:
                     self.server.log.info(log_msg.format(query['client_address'],
@@ -111,7 +109,7 @@ class CentralQueryHandler(socketserver.BaseRequestHandler):
             else:
                 self.server.log.info(log_msg.format(self.request.getpeername()[0],
                                                     self.server.current_session['user'],
-                                                    query['request_type'],
+                                                    request_type,
                                                     None,
                                                     humansize(connection.nbytes_in),
                                                     humansize(connection.nbytes_out)))
@@ -126,18 +124,19 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
         self.server.log_handler.setFormatter(logging.Formatter('%(message)s'))
         self.server.log.addHandler(self.server.log_handler)
         query = connection.recv()
-        self.server.check_session(query)
+        self.server.authorize(query)
+        request_type = query['request_type']
 
-        if query['request_type'] == 'shutdown':
+        if request_type == 'shutdown':
             self.server._shutdown_request = True
             threading.Thread(target=self.server.shutdown).start()
-        elif query['request_type'] == 'list_databases':
+        elif request_type == 'list_databases':
             connection.send(msg=self.server.databases._getvalue())
-        elif query['request_type'] == 'sync_databases':
+        elif request_type == 'sync_databases':
             self.server.sync_databases(query['nodes'], query['databases'], connection)
-        elif query['request_type'] == 'recv_databases':
+        elif request_type == 'recv_databases':
             self.server.recv_databases(connection)
-        elif query['request_type'] == 'remove_database':
+        elif request_type == 'remove_database':
             self.server.current_database = query['path']
 
             with self.server.database_lock.acquire(query['path']):
@@ -149,14 +148,14 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
             self.server.current_database = query['path']
 
             with self.server.database_lock.acquire(query['path'],
-                                                   block=(query['request_type'] in ('create_database',
-                                                                                    'new_batch',
-                                                                                    'restore_database',
-                                                                                    'add_attachment',
-                                                                                    'remove_attachment'))):
+                                                   block=(request_type in ('create_database',
+                                                                           'new_batch',
+                                                                           'restore_database',
+                                                                           'add_attachment',
+                                                                           'remove_attachment'))):
                 path = os.path.join(self.server.root_path, query['path'])
 
-                if query['request_type'] == 'create_database':
+                if request_type == 'create_database':
 
                     if query['path'] in self.server.databases.keys():
                         raise FileExistsError(f"Database already exists at '{query['path']}'!")
@@ -165,17 +164,17 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 else:
                     db = Database(path)
 
-                if query['request_type'] == 'check':
+                if request_type == 'check':
                     connection.send(msg={'corrupted_files': db.check(), 'header': None})
                     return
-                elif query['request_type'] == 'query':
+                elif request_type == 'query':
                     batch = db.query(**parse_query(query))
-                elif query['request_type'] == 'new_batch':
+                elif request_type == 'new_batch':
                     connection.send(msg=db._get_tables_specs())
                     db.new_batch(query['files'], query['batch'], query['comment'], table_generator=connection.recv_tables())
-                elif query['request_type'] == 'restore_database':
+                elif request_type == 'restore_database':
                     db.restore(query['batch'])
-                elif query['request_type'] == 'add_attachment':
+                elif request_type == 'add_attachment':
 
                     if query['file'] in db.header.attachments:
                         raise FileExistsError(f"Already existing attachment!")
@@ -184,9 +183,9 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                     connection.send(b'proceed')
                     connection.recv_file(attachment_file)
                     db.add_attachment(attachment_file, copy=False)
-                elif query['request_type'] == 'remove_attachment':
+                elif request_type == 'remove_attachment':
                     db.remove_attachment(query['name'])
-                elif query['request_type'] == 'download_attachment':
+                elif request_type == 'download_attachment':
 
                     if query['name'] not in db.header.attachments:
                         raise FileNotFoundError(f"Attachment not found!")
@@ -199,9 +198,9 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
                 if self.server.current_session['database_modified']:
                     self.server.databases[query['path']] = get_database_hash(os.path.join(path, '##header.json'))
 
-                if query['request_type'] in ('header', 'create_database',
-                                             'new_batch', 'restore_database',
-                                             'add_attachment', 'remove_attachment'):
+                if request_type in ('header', 'create_database',
+                                    'new_batch', 'restore_database',
+                                    'add_attachment', 'remove_attachment'):
                     header = db.header.__dict__
                 else:
                     header = None
@@ -225,8 +224,8 @@ class DatabaseServer(socketserver.TCPServer):
         self.context.load_cert_chain(certfile)
         super().__init__(server_address, query_handler)
         self.root_path = root_path
-        self.master_key = None
         self.databases = None
+        self.master_key = None
         self.current_session = None
         self._debug = debug
         self._done = Event()
@@ -238,6 +237,13 @@ class DatabaseServer(socketserver.TCPServer):
     def server_activate(self):
         super().server_activate()
         self.socket = self.context.wrap_socket(self.socket, server_side=True)
+
+    def serve_forever(self, *args, **kwargs):
+
+        try:
+            super().serve_forever(*args, **kwargs)
+        finally:
+            self.master_key = None
 
     def handle_error(self, request, client_address):
         self.current_session['is_error'] = True
@@ -258,7 +264,7 @@ class DatabaseServer(socketserver.TCPServer):
             data = self.connection.recv()
 
             try:
-                bytes = data.read()
+                bytes = data.getvalue()
 
                 if bytes == self.master_key:
                     self.current_session = {'is_admin': True}
@@ -310,7 +316,7 @@ class DatabaseServer(socketserver.TCPServer):
             self.handle_error(request, client_address)
             return False
 
-    def check_session(self, query):
+    def authorize(self, query):
         self.current_session['request_type'] = query['request_type']
         self.current_session['is_error'] = False
 
@@ -333,10 +339,10 @@ class DatabaseServer(socketserver.TCPServer):
         else:
             self.current_session['database_modified'] = False
             
-    def send(self, address, msg, recv=False):
+    def send(self, server_address, msg, recv=False):
 
         try:
-            connection = Connection(address)
+            connection = Connection(server_address)
             connection.send(self.master_key)
             connection.recv()
             connection.send(msg=msg)
@@ -347,8 +353,8 @@ class DatabaseServer(socketserver.TCPServer):
         finally:
             connection.kill()
 
-    def request(self, address, msg):
-        return self.send(address, msg, recv=True)
+    def request(self, server_address, msg):
+        return self.send(server_address, msg, recv=True)
 
 
 class CentralServer(DatabaseServer):
@@ -359,7 +365,6 @@ class CentralServer(DatabaseServer):
         self.log = logging.getLogger('central_server')
         self.refresh_databases()
         self.sessions = None
-        self.master_key = secrets.token_bytes()
         self.nodes = dict()
 
     def start(self, sessions_file=None):
@@ -393,6 +398,7 @@ class CentralServer(DatabaseServer):
                       n_workers=cpu_count() - 1, debug=self._debug)
         print('Address: {}:{}'.format(*self.server_address))
         log.disable_console()
+        self.master_key = secrets.token_bytes()
         self.serve_forever()
         self.log.info('Cluster shutdown')
 
@@ -597,7 +603,7 @@ class WorkerServer(DatabaseServer):
                                  'password': password,
                                  'request': 'master_key',
                                  'version': __version__})
-            self.master_key = connection.recv().read()
+            self.master_key = connection.recv().getvalue()
             connection.send(msg={'request_type': 'add_worker',
                                  'worker_address': self.server_address,
                                  'databases': self.databases._getvalue(),

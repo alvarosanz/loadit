@@ -50,6 +50,10 @@ class BaseClient(object):
         ----------
         connection : Connection
             Server connection instance.
+        user : str
+            User.
+        password : str
+            Password.
         """
 
         if self._authentication:
@@ -67,7 +71,7 @@ class BaseClient(object):
                                  'password': password,
                                  'request': 'authentication',
                                  'version': __version__})
-            self._authentication = connection.recv().read()
+            self._authentication = connection.recv().getvalue()
 
         connection.recv()
 
