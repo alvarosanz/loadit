@@ -1,81 +1,118 @@
 import os
-import socket
+import socket as sock
 import ssl
 import json
-import numpy as np
 from io import BytesIO
-from loadit.misc import humansize
-from loadit.read_results import tables_in_pch, ResultsTable
 import logging
 
 
 log = logging.getLogger()
 
-
+# SSL default settings (intended to work with self-signed certificates)
 SSL_CONTEXT = ssl.create_default_context()
 SSL_CONTEXT.check_hostname = False
 SSL_CONTEXT.verify_mode = ssl.VerifyMode.CERT_NONE
 
 
 class Connection(object):
+    """
+    Handle a TCP/IP connection.
+    """
 
-    def __init__(self, server_address=None, connection_socket=None, ssl_context=SSL_CONTEXT,
-                 header_size=15, buffer_size=4096):
-        self.ssl_context = SSL_CONTEXT
+    def __init__(self, peer_address=None, socket=None,
+                 ssl_context=SSL_CONTEXT, buffer_size=4096):
+        """
+        Initialize a Connection instance.
 
-        if server_address:
-            self.connect(server_address)
+        Parameters
+        ----------
+        peer_address : tuple of (str, int), optional
+            Peer address (ip address, port number). It creates a new TCP/IP connection.
+        socket : socket.socket, optional
+            TCP/IP socket. It uses an already existing TCP/IP connection.
+        ssl_context : ssl.SSLContext, optional
+            SSL context settings.
+        buffer_size : int, optional
+            Socket buffer size.
+        """
+        self.ssl_context = ssl_context
+
+        if peer_address:
+            self.connect(peer_address)
         else:
-            self.socket = connection_socket
+            self.socket = socket
 
-        self.header_size = header_size
         self.buffer_size = buffer_size
+        self.header_size = 8
         self.pending_data = b''
         self.nbytes_in = 0
         self.nbytes_out = 0
 
-    def connect(self, server_address):
-        self.socket = self.ssl_context.wrap_socket(socket.socket())
-        self.socket.connect(server_address)
+    def connect(self, peer_address):
+        """
+        Create a new TCP/IP connection with a peer.
+
+        Parameters
+        ----------
+        peer_address : tuple of (str, int)
+            Peer address (ip address, port number). It creates a new TCP/IP connection.
+        """
+        self.socket = self.ssl_context.wrap_socket(sock.socket())
+        self.socket.connect(peer_address)
 
     def kill(self):
+        """
+        Kill underlying TCP/IP connection.
+        """
         self.socket.close()
 
-    def send(self, bytes=None, msg=None, debug_msg=None, info_msg=None, warning_msg=None, error_msg=None, critical_msg=None, exception=None):
+    def send(self, msg, msg_type='bytes'):
+        """
+        Send a message to peer.
 
-        if bytes: # bytes message
-            data_type = '0'
-        elif msg: # json message
-            data_type = '1'
+        Parameters
+        ----------
+        msg : bytes, dict or str
+            Message to be sended.
+        msg_type : {'bytes', 'json', 'debug_log', 'info_log', 'warning_log',
+                    'error_log', 'critical_log', 'exception'}, optional
+            Message type. It can be raw bytes, a dict (encoded as json),
+            a log entry or an exception descriptor (both of them of type str).
+        """
+
+        type_encoding = {'bytes': '0', 'json': '1',
+                         'debug_log': '2', 'info_log': '3',
+                         'warning_log': '4', 'error_log': '5', 'critical_log': '6',
+                         'exception': '#'}
+
+        if type(msg) is dict:
+            msg_type = 'json'
+
+        if msg_type == 'bytes': # bytes message
+            bytes = msg
+        elif msg_type == 'json': # json message
             bytes = json.dumps(msg).encode()
-        elif debug_msg: # debug log record
-            data_type = '2'
-            bytes = debug_msg.encode()
-        elif info_msg: # info log record
-            data_type = '3'
-            bytes = info_msg.encode()
-        elif warning_msg: # warning log record
-            data_type = '4'
-            bytes = warning_msg.encode()
-        elif error_msg: # error log record
-            data_type = '5'
-            bytes = error_msg.encode()
-        elif critical_msg: # critical log record
-            data_type = '6'
-            bytes = critical_msg.encode()
-        elif exception: # exception
-            data_type = '#'
-            bytes = exception.encode()
+        elif msg_type in type_encoding:
+            bytes = msg.encode()
+        else:
+            raise ValueError(f"Not supported message type: '{msg_type}'")
 
-        self.socket.send((str(len(bytes)).zfill(self.header_size - 1) + data_type).encode())
+        self.socket.send((len(bytes).to_bytes(self.header_size - 1, 'little') + type_encoding[msg_type].encode()))
         self.socket.sendall(bytes)
         self.nbytes_out += self.header_size + len(bytes)
 
     def recv(self):
+        """
+        Receive a message from peer.
+
+        Returns
+        -------
+        io.BytesIO, dict or str
+        """
 
         while True:
             data = self._recv0()
-            size = int(data[:self.header_size - 1].decode())
+            size = int.from_bytes(data[:self.header_size - 1], 'little')
             data_type = data[self.header_size - 1:self.header_size].decode()
             buffer = BytesIO()
             buffer.write(data[self.header_size:])
@@ -93,70 +130,42 @@ class Connection(object):
             if data_type == '0': # bytes message
                 return buffer
             elif data_type == '1': # json message
-                return json.loads(buffer.read())
+                return json.loads(buffer.getvalue())
             elif data_type == '2': # debug log record
-                log.debug(buffer.read().decode())
+                log.debug(buffer.getvalue().decode())
             elif data_type == '3': # info log record
-                log.info(buffer.read().decode())
+                log.info(buffer.getvalue().decode())
             elif data_type == '4': # warning log record
-                log.warning(buffer.read().decode())
+                log.warning(buffer.getvalue().decode())
             elif data_type == '5': # error log record
-                log.error(buffer.read().decode())
+                log.error(buffer.getvalue().decode())
             elif data_type == '6': # critical log record
-                log.critical(buffer.read().decode())
+                log.critical(buffer.getvalue().decode())
             elif data_type == '#': # exception
-                raise ConnectionError(buffer.read().decode())
+                raise ConnectionError(buffer.getvalue().decode())
 
     def _recv0(self):
         data = self.pending_data
 
         if not (self.pending_data and
                 len(self.pending_data) > self.header_size and
-                (len(self.pending_data) - self.header_size) == int(self.pending_data[:self.header_size - 1].decode())):
+                (len(self.pending_data) - self.header_size) == int.from_bytes(self.pending_data[:self.header_size - 1], 'little')):
             data += self.socket.recv(self.buffer_size)
 
         self.pending_data = b''
         return data
 
-    def send_tables(self, files, tables_specs):
-        ignored_tables = set()
-
-        for i, file in enumerate(files):
-            log.info(f"Transferring file {i + 1} of {len(files)} ({humansize(os.path.getsize(file))}): '{os.path.basename(file)}'...")
-
-            for table in tables_in_pch(file, tables_specs):
-
-                if table.name not in tables_specs:
-
-                    if table.name not in ignored_tables:
-                        log.warning("WARNING: '{}' is not supported!".format(table.name))
-                        ignored_tables.add(table.name)
-
-                    continue
-
-                f = BytesIO()
-                np.save(f, table.data)
-                table.data = None
-                self.send(msg=table.__dict__)
-                self.send(bytes=f.getbuffer())
-
-        self.send(msg='END')
-
-    def recv_tables(self):
-
-        while True:
-            data = self.recv()
-
-            if data == 'END':
-                break
-
-            table = ResultsTable(**data)
-            table.data = np.load(self.recv())
-            yield table
-
     def send_file(self, file):
+        """
+        Send file to peer.
+
+        Parameters
+        ----------
+        file : str
+            File path.
+        """
         size = os.path.getsize(file)
-        self.socket.send(str(size).zfill(self.header_size).encode())
+        self.socket.send(size.to_bytes(self.header_size - 1, 'little'))
 
         with open(file, 'rb') as f:
 
@@ -172,8 +181,16 @@ class Connection(object):
         self.recv()
 
     def recv_file(self, file):
+        """
+        Receive file from peer.
+
+        Parameters
+        ----------
+        file : str
+            File path.
+        """
         data = self._recv0()
-        size = int(data[:self.header_size].decode())
+        size = int.from_bytes(data[:self.header_size], 'little')
 
         with open(file, 'wb') as f:
             f.write(data[self.header_size:])
@@ -183,23 +200,3 @@ class Connection(object):
 
         self.nbytes_in += self.header_size + size
         self.send(b'OK')
-
-
-def get_ip():
-    s = socket.socket(type=socket.SOCK_DGRAM)
-    try:
-        # doesn't even have to be reachable
-        s.connect(('10.255.255.255', 1))
-        return s.getsockname()[0]
-    except:
-        return '127.0.0.1'
-    finally:
-        s.close()
-
-
-def find_free_port():
-    s = socket.socket()
-    s.bind(('localhost', 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port

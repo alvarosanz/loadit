@@ -21,7 +21,7 @@ log = logging.getLogger()
 
 class DatabaseHeader(object):
     """
-    Stores database metadata.
+    Store database metadata.
     """
 
     def __init__(self, path=None, header=None):
@@ -237,7 +237,7 @@ def create_database(database_path, overwrite=False):
 
 class Database(object):
     """
-    Handles a local database.
+    Handle a local database.
     """
 
     def __init__(self, path=None, max_memory=1e9):
@@ -788,7 +788,7 @@ def process_field(field, basic_field, table, query_functions, geometry,
 
 class MemoryHandler(object):
     """
-    Handles memory management in queries.
+    Handle memory management in queries.
     """
 
     def __init__(self, max_memory, LID_suffix, fields, LIDs, IDs, groups=None,

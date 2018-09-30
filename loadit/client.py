@@ -6,6 +6,7 @@ import time
 import pyarrow as pa
 from loadit.database import DatabaseHeader, Database, create_database, parse_query
 from loadit.connection import Connection
+from loadit.connection_tools import send_tables
 from loadit.misc import get_hash, humansize
 import logging
 
@@ -15,7 +16,7 @@ log = logging.getLogger()
 
 class BaseClient(object):
     """
-    Handles a remote connection.
+    Handle a remote connection.
     """
 
     def __init__(self):
@@ -67,10 +68,10 @@ class BaseClient(object):
             if not password:
                 password = getpass.getpass('password: ')
 
-            connection.send(msg={'user': user,
-                                 'password': password,
-                                 'request': 'authentication',
-                                 'version': __version__})
+            connection.send({'user': user,
+                             'password': password,
+                             'request': 'authentication',
+                             'version': __version__})
             self._authentication = connection.recv().getvalue()
 
         connection.recv()
@@ -87,9 +88,9 @@ class BaseClient(object):
 
             # Sending request
             if is_redirected:
-                connection.send(msg={key: kwargs[key] for key in ('request_type', 'path')})
+                connection.send({key: kwargs[key] for key in ('request_type', 'path')})
             else:
-                connection.send(msg=kwargs)
+                connection.send(kwargs)
 
             data = connection.recv()
 
@@ -104,7 +105,7 @@ class BaseClient(object):
                 connection.kill()
                 connection.connect(tuple(data['redirection_address']))
                 self.authenticate(connection)
-                connection.send(msg=kwargs)
+                connection.send(kwargs)
                 data = connection.recv()
 
             if 'msg' in data and data['msg']:
@@ -118,7 +119,7 @@ class BaseClient(object):
                     log.info(data['msg'])
 
             elif kwargs['request_type'] == 'new_batch':
-                connection.send_tables(kwargs['files'], data)
+                send_tables(connection, kwargs['files'], data)
                 data = connection.recv()
             elif kwargs['request_type'] == 'query':
                 reader = pa.RecordBatchStreamReader(pa.BufferReader(connection.recv().getbuffer()))
@@ -139,7 +140,7 @@ class BaseClient(object):
 
 class DatabaseClient(BaseClient):
     """
-    Handles a remote database.
+    Handle a remote database.
     """
 
     def __init__(self, server_address, path, authentication, header=None):
@@ -302,7 +303,7 @@ class DatabaseClient(BaseClient):
 
 class Client(BaseClient):
     """
-    Handles a remote connection.
+    Handle a remote connection.
     """
 
     def load_database(self, database):

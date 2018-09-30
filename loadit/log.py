@@ -35,15 +35,15 @@ class ConnectionHandler(logging.StreamHandler):
     def emit(self, record):
 
         if record.levelname == 'DEBUG':
-            self.connection.send(debug_msg=record.getMessage())
+            self.connection.send(record.getMessage(), 'debug_log')
         elif record.levelname == 'INFO':
-            self.connection.send(info_msg=record.getMessage())
+            self.connection.send(record.getMessage(), 'info_log')
         elif record.levelname == 'WARNING':
-            self.connection.send(warning_msg=record.getMessage())
+            self.connection.send(record.getMessage(), 'warning_log')
         elif record.levelname == 'ERROR':
-            self.connection.send(error_msg=record.getMessage())
+            self.connection.send(record.getMessage(), 'error_log')
         elif record.levelname == 'CRITICAL':
-            self.connection.send(critical_msg=record.getMessage()) 
+            self.connection.send(record.getMessage(), 'critical_log') 
 
 
 _is_file_handler = False
