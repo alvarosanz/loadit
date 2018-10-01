@@ -74,24 +74,22 @@ class Connection(object):
         ----------
         msg : bytes, dict or str
             Message to be sended.
-        msg_type : {'bytes', 'json', 'debug_log', 'info_log', 'warning_log',
+        msg_type : {'bytes', 'buffer', 'file', 'json',
+                    'debug_log', 'info_log', 'warning_log',
                     'error_log', 'critical_log', 'exception'}, optional
             Message type. It can be raw bytes, a dict (encoded as json),
             a log entry or an exception descriptor (both of them of type str).
         """
 
-        type_encoding = {'bytes': '0', 'json': '1',
-                         'debug_log': '2', 'info_log': '3',
-                         'warning_log': '4', 'error_log': '5', 'critical_log': '6',
-                         'exception': '#'}
+        type_encoding = {'bytes': 'b', 'buffer': 'B', 'file': 'f', 'json': 'j',
+                         'debug_log': 'd', 'info_log': 'i', 'warning_log': 'w',
+                         'error_log': 'e', 'critical_log': 'c', 'exception': 'E'}
 
         if type(msg) is dict:
             msg_type = 'json'
-
-        if msg_type == 'bytes': # bytes message
-            bytes = msg
-        elif msg_type == 'json': # json message
             bytes = json.dumps(msg).encode()
+        elif msg_type in ('bytes', 'buffer', 'file'): # bytes message
+            bytes = msg
         elif msg_type in type_encoding:
             bytes = msg.encode()
         else:
@@ -127,21 +125,25 @@ class Connection(object):
             buffer.truncate()
             buffer.seek(0)
 
-            if data_type == '0': # bytes message
+            if data_type == 'b': # bytes message
+                return buffer.getvalue()
+            elif data_type == 'B': # buffer message
+                return buffer.getbuffer()
+            elif data_type == 'f': # file message
                 return buffer
-            elif data_type == '1': # json message
+            elif data_type == 'j': # json message
                 return json.loads(buffer.getvalue())
-            elif data_type == '2': # debug log record
+            elif data_type == 'd': # debug log record
                 log.debug(buffer.getvalue().decode())
-            elif data_type == '3': # info log record
+            elif data_type == 'i': # info log record
                 log.info(buffer.getvalue().decode())
-            elif data_type == '4': # warning log record
+            elif data_type == 'w': # warning log record
                 log.warning(buffer.getvalue().decode())
-            elif data_type == '5': # error log record
+            elif data_type == 'e': # error log record
                 log.error(buffer.getvalue().decode())
-            elif data_type == '6': # critical log record
+            elif data_type == 'c': # critical log record
                 log.critical(buffer.getvalue().decode())
-            elif data_type == '#': # exception
+            elif data_type == 'E': # exception
                 raise ConnectionError(buffer.getvalue().decode())
 
     def _recv0(self):

@@ -39,7 +39,7 @@ class BaseClient(object):
     def info(self):
 
         if self._authentication:
-            print(self._request(request_type='cluster_info').getvalue().decode())
+            print(self._request(request_type='cluster_info').decode())
         else:
             print('Not connected!')
 
@@ -72,7 +72,7 @@ class BaseClient(object):
                              'password': password,
                              'request': 'authentication',
                              'version': __version__})
-            self._authentication = connection.recv().getvalue()
+            self._authentication = connection.recv()
 
         connection.recv()
 
@@ -95,7 +95,7 @@ class BaseClient(object):
             data = connection.recv()
 
             # Redirecting request (if necessary)
-            if 'redirection_address' in data:
+            if type(data) is dict and 'redirection_address' in data:
 
                 for key in data:
 
@@ -108,7 +108,7 @@ class BaseClient(object):
                 connection.send(kwargs)
                 data = connection.recv()
 
-            if 'msg' in data and data['msg']:
+            if type(data) is dict and 'msg' in data and data['msg']:
                 log.info(data['msg'])
 
             # Processing request
@@ -122,7 +122,7 @@ class BaseClient(object):
                 send_tables(connection, kwargs['files'], data)
                 data = connection.recv()
             elif kwargs['request_type'] == 'query':
-                reader = pa.RecordBatchStreamReader(pa.BufferReader(connection.recv().getbuffer()))
+                reader = pa.RecordBatchStreamReader(pa.BufferReader(connection.recv()))
                 log.info('Done!')
                 data['batch'] = reader.read_next_batch()
             elif kwargs['request_type'] == 'add_attachment':

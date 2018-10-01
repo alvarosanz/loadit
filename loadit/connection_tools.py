@@ -30,7 +30,7 @@ def send_tables(connection, files, tables_specs):
             np.save(f, table.data)
             table.data = None
             connection.send(table.__dict__)
-            connection.send(f.getbuffer())
+            connection.send(f.getbuffer(), 'file')
 
     connection.send(b'END')
 
@@ -40,12 +40,12 @@ def recv_tables(connection):
     while True:
         data = connection.recv()
 
-        try:
-            table = ResultsTable(**data)
-            table.data = np.load(connection.recv())
-            yield table
-        except TypeError:
+        if data == b'END':
             break
+
+        table = ResultsTable(**data)
+        table.data = np.load(connection.recv())
+        yield table
 
 
 def get_ip():

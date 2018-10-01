@@ -211,7 +211,7 @@ class WorkerQueryHandler(socketserver.BaseRequestHandler):
             try:
                 batch_message = get_batch_message(batch)
                 connection.send({'msg': f"Transferring query results ({humansize(len(batch_message))})...", 'header': header})
-                connection.send(batch_message)
+                connection.send(batch_message, 'buffer')
             except NameError:
                 connection.send({'header': header})
 
@@ -264,22 +264,9 @@ class DatabaseServer(socketserver.TCPServer):
             self.connection = Connection(socket=request)
             data = self.connection.recv()
 
-            try:
-                bytes = data.getvalue()
+            if type(data) is dict:
 
-                if bytes == self.master_key:
-                    self.current_session = {'is_admin': True}
-                else:
-
-                    try:
-                        self.current_session = jwt.decode(bytes, self.master_key)
-                    except Exception:
-                        error_msg = 'Invalid token!'
-                        raise PermissionError()
-                    
-            except AttributeError:
-
-                if 'password' in data:
+                if 'password' in data: # User login
 
                     try:
                         self.current_session = self.sessions.get_session(data['user'], data['password'])
@@ -305,6 +292,16 @@ class DatabaseServer(socketserver.TCPServer):
                         self.connection.send(authentication)
 
                 else:
+                    raise PermissionError()
+
+            elif data == self.master_key: # master key
+                self.current_session = {'is_admin': True}
+            else: # JSON Web Token
+
+                try:
+                    self.current_session = jwt.decode(data, self.master_key)
+                except Exception:
+                    error_msg = 'Invalid token!'
                     raise PermissionError()
 
             self.connection.send(b'Access granted!')
@@ -545,7 +542,7 @@ class WorkerServer(DatabaseServer):
                              'password': password,
                              'request': 'master_key',
                              'version': __version__})
-            self.master_key = connection.recv().getvalue()
+            self.master_key = connection.recv()
             connection.send({'request_type': 'add_worker',
                              'worker_address': self.server_address,
                              'databases': self.databases._getvalue(),
