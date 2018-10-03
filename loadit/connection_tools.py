@@ -30,7 +30,7 @@ def send_tables(connection, files, tables_specs):
             np.save(f, table.data)
             table.data = None
             connection.send(table.__dict__)
-            connection.send(f.getbuffer(), 'file')
+            connection.send(f.getbuffer(), 'buffer')
 
     connection.send(b'END')
 

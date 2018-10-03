@@ -74,8 +74,6 @@ class BaseClient(object):
                              'version': __version__})
             self._authentication = connection.recv()
 
-        connection.recv()
-
     def _request(self, is_redirected=False, **kwargs):
         """
         Request something to the server.
@@ -122,7 +120,7 @@ class BaseClient(object):
                 send_tables(connection, kwargs['files'], data)
                 data = connection.recv()
             elif kwargs['request_type'] == 'query':
-                reader = pa.RecordBatchStreamReader(pa.BufferReader(connection.recv()))
+                reader = pa.RecordBatchStreamReader(pa.BufferReader(connection.recv().getbuffer()))
                 log.info('Done!')
                 data['batch'] = reader.read_next_batch()
             elif kwargs['request_type'] == 'add_attachment':

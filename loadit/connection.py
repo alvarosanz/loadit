@@ -47,6 +47,7 @@ class Connection(object):
         self.pending_data = b''
         self.nbytes_in = 0
         self.nbytes_out = 0
+        self.waiting = False
 
     def connect(self, peer_address):
         """
@@ -66,6 +67,26 @@ class Connection(object):
         """
         self.socket.close()
 
+    def wait(self):
+        """
+        Wait until peer confirmation.
+        """
+
+        if self.waiting:
+            self.recv()
+
+        self.waiting = True
+
+    def awake_peer(self):
+        """
+        Send peer confirmation.
+        """
+
+        if not self.waiting and self.nbytes_in:
+            self.send(b'OK')
+
+        self.waiting = False
+
     def send(self, msg, msg_type='bytes'):
         """
         Send a message to peer.
@@ -74,21 +95,22 @@ class Connection(object):
         ----------
         msg : bytes, dict or str
             Message to be sended.
-        msg_type : {'bytes', 'buffer', 'file', 'json',
+        msg_type : {'bytes', 'buffer', 'json',
                     'debug_log', 'info_log', 'warning_log',
                     'error_log', 'critical_log', 'exception'}, optional
             Message type. It can be raw bytes, a dict (encoded as json),
             a log entry or an exception descriptor (both of them of type str).
         """
-
-        type_encoding = {'bytes': 'b', 'buffer': 'B', 'file': 'f', 'json': 'j',
+        type_encoding = {'bytes': 'b', 'buffer': 'B', 'json': 'j',
                          'debug_log': 'd', 'info_log': 'i', 'warning_log': 'w',
                          'error_log': 'e', 'critical_log': 'c', 'exception': 'E'}
 
         if type(msg) is dict:
+            self.wait()
             msg_type = 'json'
             bytes = json.dumps(msg).encode()
-        elif msg_type in ('bytes', 'buffer', 'file'): # bytes message
+        elif msg_type in ('bytes', 'buffer'): # bytes message
+            self.wait()
             bytes = msg
         elif msg_type in type_encoding:
             bytes = msg.encode()
@@ -105,8 +127,9 @@ class Connection(object):
 
         Returns
         -------
-        io.BytesIO, dict or str
+        bytes, io.BytesIO or dict
         """
+        self.awake_peer()
 
         while True:
             data = self._recv0()
@@ -128,8 +151,6 @@ class Connection(object):
             if data_type == 'b': # bytes message
                 return buffer.getvalue()
             elif data_type == 'B': # buffer message
-                return buffer.getbuffer()
-            elif data_type == 'f': # file message
                 return buffer
             elif data_type == 'j': # json message
                 return json.loads(buffer.getvalue())
@@ -166,6 +187,7 @@ class Connection(object):
         file : str
             File path.
         """
+        self.wait()
         size = os.path.getsize(file)
         self.socket.send(size.to_bytes(self.header_size - 1, 'little'))
 
@@ -180,7 +202,6 @@ class Connection(object):
                 self.socket.send(bytes)
                 
         self.nbytes_out += self.header_size + size
-        self.recv()
 
     def recv_file(self, file):
         """
@@ -191,6 +212,7 @@ class Connection(object):
         file : str
             File path.
         """
+        self.awake_peer()
         data = self._recv0()
         size = int.from_bytes(data[:self.header_size], 'little')
 
@@ -201,4 +223,3 @@ class Connection(object):
                 f.write(self.socket.recv(self.buffer_size))
 
         self.nbytes_in += self.header_size + size
-        self.send(b'OK')

@@ -304,7 +304,6 @@ class DatabaseServer(socketserver.TCPServer):
                     error_msg = 'Invalid token!'
                     raise PermissionError()
 
-            self.connection.send(b'Access granted!')
             return True
 
         except PermissionError:
